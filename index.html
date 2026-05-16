@@ -176,6 +176,33 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .bx-done.done { background: var(--success); border-color: var(--success); color: #fff; }
 .bx-del { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
 
+/* ── CONFIG OVERLAY ── */
+.cfg-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.8);
+  z-index: 300; display: none; align-items: center; justify-content: center; padding: 24px;
+}
+.cfg-overlay.on { display: flex; }
+.cfg-box {
+  background: var(--surface); border-radius: var(--r); padding: 24px;
+  width: 100%; max-width: 440px;
+}
+.cfg-title { font-weight: 800; font-size: 1.1rem; margin-bottom: 6px; }
+.cfg-sub { font-size: .85rem; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+.cfg-label { font-size: .72rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 5px; display: block; }
+.cfg-input {
+  width: 100%; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--rs); padding: 10px 12px; color: var(--text);
+  font-size: .95rem; outline: none; margin-bottom: 14px;
+}
+.cfg-input:focus { border-color: var(--accent); }
+.cfg-btns { display: flex; gap: 8px; }
+.cfg-save { flex: 1; padding: 11px; border-radius: var(--r); border: none;
+  background: var(--accent); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; }
+.cfg-skip { padding: 11px 14px; border-radius: var(--r);
+  border: 1px solid var(--border); background: transparent;
+  color: var(--muted); font-size: .9rem; cursor: pointer; }
+
 /* ── MISC ── */
 .sec { font-size: .75rem; color: var(--muted); text-transform: uppercase;
   letter-spacing: .07em; font-weight: 700; margin: 18px 0 10px; }
@@ -251,10 +278,28 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 <div id="toast"></div>
 <div id="recBanner">🎙️ Aan het luisteren — spreek nu</div>
 
+<!-- Config overlay -->
+<div class="cfg-overlay" id="cfgOverlay">
+  <div class="cfg-box">
+    <div class="cfg-title">⚙️ API-sleutel instellen</div>
+    <div class="cfg-sub">Voer je Anthropic API-sleutel in. Deze wordt alleen lokaal opgeslagen op dit apparaat en nooit verstuurd naar andere servers.</div>
+    <label class="cfg-label">Anthropic API-sleutel</label>
+    <input class="cfg-input" id="cfgKeyIn" type="password" placeholder="sk-ant-…"
+      onkeydown="if(event.key==='Enter') saveConfig()">
+    <div class="cfg-btns">
+      <button class="cfg-save" onclick="saveConfig()">✅ Opslaan</button>
+      <button class="cfg-skip" onclick="hideConfig()">Overslaan</button>
+    </div>
+  </div>
+</div>
+
 <div class="hdr">
   <div class="hdr-top">
     <h1>🧠 Extern Brein</h1>
-    <button onclick="refreshData()" title="Vernieuwen">↻</button>
+    <div style="display:flex;gap:4px">
+      <button onclick="showConfig()" title="Instellingen">⚙️</button>
+      <button onclick="refreshData()" title="Vernieuwen">↻</button>
+    </div>
   </div>
   <div class="tabs">
     <button class="tab active" id="tab-inbox"    onclick="go('inbox')">📥 Inbox</button>
@@ -332,10 +377,24 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 
 <script>
 // ════════════════════════════════════════════════════
-//  CONFIG  — vul hier je sleutels in
+//  CONFIG
 // ════════════════════════════════════════════════════
-const ANTHROPIC_KEY  = 'YOUR_ANTHROPIC_API_KEY_HERE';
-const SHEETS_URL     = 'YOUR_APPS_SCRIPT_URL_HERE';   // volgt later
+const SHEETS_URL = 'YOUR_APPS_SCRIPT_URL_HERE';   // volgt later
+function getApiKey() { return localStorage.getItem('eb_api_key') || ''; }
+function setApiKey(k) { localStorage.setItem('eb_api_key', k); }
+
+function showConfig() {
+  document.getElementById('cfgKeyIn').value = getApiKey();
+  document.getElementById('cfgOverlay').classList.add('on');
+  document.getElementById('cfgKeyIn').focus();
+}
+function hideConfig() { document.getElementById('cfgOverlay').classList.remove('on'); }
+function saveConfig() {
+  const k = document.getElementById('cfgKeyIn').value.trim();
+  setApiKey(k);
+  hideConfig();
+  if (k) toast('✅ API-sleutel opgeslagen');
+}
 
 // ════════════════════════════════════════════════════
 //  CATEGORIEËN (persistent via localStorage)
@@ -372,7 +431,13 @@ async function sheetGet() {
 }
 
 async function sheetAdd(item) {
-  if (!sheetsReady()) { localAdd(item); return item; }
+  if (!sheetsReady()) {
+    // Sla op in localStorage zonder S.items te wijzigen (approveItem doet dat)
+    const stored = JSON.parse(localStorage.getItem('eb_items') || '[]');
+    stored.unshift(item);
+    localStorage.setItem('eb_items', JSON.stringify(stored));
+    return item;
+  }
   try {
     const r = await fetch(SHEETS_URL, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -419,7 +484,8 @@ function localDelete(id) { S.items = S.items.filter(x => x.ID !== id); localSave
 //  ANTHROPIC AI
 // ════════════════════════════════════════════════════
 async function aiAnalyze(text) {
-  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.includes('YOUR_')) return mockAnalyze(text);
+  const ANTHROPIC_KEY = getApiKey();
+  if (!ANTHROPIC_KEY) return mockAnalyze(text);
   const prompt = `Analyseer de volgende invoer van iemand met ADD en geef een JSON-object terug.
 
 Invoer: "${text}"
@@ -461,7 +527,8 @@ function mockAnalyze(text) {
 }
 
 async function aiSearch(query) {
-  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.includes('YOUR_')) {
+  const ANTHROPIC_KEY = getApiKey();
+  if (!ANTHROPIC_KEY) {
     return `(AI niet geconfigureerd) Zoekterm: "${query}"`;
   }
   const list = S.items.map(i =>
@@ -497,7 +564,7 @@ function initRec(onResult, onEnd) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return null;
   const r = new SR();
-  r.lang = 'nl-NL'; r.continuous = false; r.interimResults = true;
+  r.lang = 'nl-NL'; r.continuous = true; r.interimResults = true;
   r.onresult = e => {
     const t = Array.from(e.results).map(x => x[0].transcript).join('');
     onResult(t);
@@ -883,6 +950,7 @@ async function refreshData() {
 //  INIT
 // ════════════════════════════════════════════════════
 async function init() {
+  if (!getApiKey()) showConfig();
   document.getElementById('main').innerHTML =
     '<div class="loading"><span class="spin"></span> Laden…</div>';
   S.items = await sheetGet();
