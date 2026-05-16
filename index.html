@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🧠 Extern Brein</title>
+<style>
+:root {
+  --bg: #111827; --surface: #1f2937; --card: #374151;
+  --accent: #6366f1; --accent-light: #a5b4fc;
+  --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+  --text: #f3f4f6; --muted: #9ca3af; --border: #374151;
+  --r: 14px; --rs: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; max-width: 720px; margin: 0 auto;
+  padding-bottom: 180px;
+}
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+  background: var(--card); color: var(--text); padding: 10px 20px;
+  border-radius: 24px; font-size: .9rem; z-index: 9999;
+  opacity: 0; transition: opacity .25s; pointer-events: none;
+  white-space: nowrap; max-width: 90vw;
+}
+#toast.show { opacity: 1; }
+
+/* ── RECORDING BANNER ── */
+#recBanner {
+  display: none; background: var(--danger); color: #fff;
+  text-align: center; padding: 7px; font-size: .85rem; font-weight: 600;
+  animation: pulseBg 1s ease-in-out infinite;
+}
+#recBanner.on { display: block; }
+@keyframes pulseBg { 0%,100% { background: #ef4444; } 50% { background: #dc2626; } }
+
+/* ── HEADER ── */
+.hdr {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  padding: 12px 16px 0;
+}
+.hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.hdr-top h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -.01em; }
+.hdr-top button { background: none; border: none; color: var(--muted); font-size: 1.25rem; cursor: pointer; padding: 4px; }
+
+.tabs {
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  padding-bottom: 12px;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex-shrink: 0; padding: 7px 14px; border-radius: 20px; border: none;
+  background: var(--surface); color: var(--muted); font-size: .82rem;
+  cursor: pointer; transition: all .18s; position: relative;
+}
+.tab.active { background: var(--accent); color: #fff; }
+.badge {
+  position: absolute; top: -4px; right: -4px;
+  background: var(--danger); color: #fff; font-size: .65rem;
+  font-weight: 700; min-width: 16px; height: 16px;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+
+/* ── CONTENT ── */
+.content { padding: 14px 16px; }
+
+/* ── BOTTOM INPUT AREA ── */
+.bottom {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 720px; background: var(--bg);
+  border-top: 1px solid var(--border); padding: 10px 14px;
+  z-index: 100;
+}
+
+/* AI panel */
+.ai-panel {
+  display: none; background: var(--surface);
+  border: 1px solid var(--accent); border-radius: var(--r);
+  padding: 14px; margin-bottom: 10px;
+}
+.ai-panel.on { display: block; }
+.ai-label { font-size: .72rem; color: var(--accent-light); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+.ai-text {
+  background: var(--card); border-radius: var(--rs);
+  padding: 10px 12px; font-size: .95rem; line-height: 1.5; margin-bottom: 10px;
+}
+.ai-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tag { padding: 3px 10px; border-radius: 14px; font-size: .77rem; font-weight: 600; }
+.t-type { background:#1e3a5f; color:#60a5fa; }
+.t-cat  { background:#1e3a2f; color:#34d399; }
+.t-dur  { background:#3a2f1e; color:#fb923c; }
+.t-hi   { background:#3a1e1e; color:#f87171; }
+.t-mid  { background:#3a2f1e; color:#fb923c; }
+.t-lo   { background:#1e3a2f; color:#34d399; }
+
+/* edit form inside panel */
+.edit-form { display: none; margin-bottom: 10px; }
+.edit-form.on { display: block; }
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.fg { display: flex; flex-direction: column; gap: 3px; }
+.flabel { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+select, .finput, textarea.finput {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--rs);
+  padding: 9px 11px; color: var(--text); font-size: .92rem; outline: none; width: 100%;
+}
+select:focus, .finput:focus { border-color: var(--accent); }
+textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
+
+.ai-btns { display: flex; gap: 8px; }
+.btn-ok {
+  flex: 1; padding: 13px; border-radius: var(--r); border: none;
+  background: var(--success); color: #fff; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+}
+.btn-edit-toggle {
+  padding: 13px 16px; border-radius: var(--r); border: 1px solid var(--border);
+  background: transparent; color: var(--text); font-size: .95rem; cursor: pointer;
+}
+.btn-discard {
+  padding: 13px; border-radius: var(--r); border: 1px solid var(--danger);
+  background: transparent; color: var(--danger); font-size: .95rem; cursor: pointer;
+}
+
+/* text input row */
+.input-row { display: flex; gap: 8px; align-items: flex-end; }
+.main-input {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 11px 14px; color: var(--text);
+  font-size: 1rem; resize: none; min-height: 46px; max-height: 120px;
+  outline: none; transition: border-color .18s; font-family: inherit;
+}
+.main-input:focus { border-color: var(--accent); }
+.btn-round {
+  width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 1.2rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.btn-mic { background: var(--surface); color: var(--text); transition: background .18s; }
+.btn-mic.on { background: var(--danger); animation: pulse .9s ease-in-out infinite; }
+.btn-send { background: var(--accent); color: #fff; }
+@keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.08); } }
+
+/* ── ITEMS ── */
+.item {
+  background: var(--surface); border-radius: var(--r); padding: 14px;
+  margin-bottom: 10px; border-left: 4px solid var(--border); position: relative;
+}
+.item.p-hoog    { border-left-color: var(--danger); }
+.item.p-gemiddeld { border-left-color: var(--warning); }
+.item.p-laag    { border-left-color: var(--success); }
+.item.inbox-item { border-left-color: var(--accent); }
+.item.done-item { opacity: .55; }
+
+.item-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+.item-body { font-size: .97rem; line-height: 1.5; flex: 1; }
+.item-type-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.item-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.mtag {
+  font-size: .73rem; padding: 2px 8px; border-radius: 10px;
+  background: var(--card); color: var(--muted);
+}
+.item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-xs {
+  padding: 6px 11px; border-radius: var(--rs); border: none;
+  font-size: .78rem; cursor: pointer; font-weight: 600; transition: opacity .15s;
+}
+.bx-ok  { background: var(--success); color: #fff; }
+.bx-done { background: transparent; border: 1px solid var(--muted); color: var(--muted); }
+.bx-done.done { background: var(--success); border-color: var(--success); color: #fff; }
+.bx-del { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+
+/* ── MISC ── */
+.sec { font-size: .75rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .07em; font-weight: 700; margin: 18px 0 10px; }
+.empty { text-align: center; padding: 48px 16px; color: var(--muted); }
+.empty .ei { font-size: 2.8rem; margin-bottom: 12px; }
+.empty .et { font-size: .97rem; }
+.loading { display: flex; align-items: center; gap: 10px; color: var(--muted);
+  font-size: .9rem; padding: 18px 0; }
+.spin { width: 20px; height: 20px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .75s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* chips */
+.chips { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip {
+  padding: 7px 14px; border-radius: 18px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: .82rem; cursor: pointer; transition: all .15s;
+}
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* category grid */
+.cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+.cat-card {
+  background: var(--surface); border-radius: var(--r); padding: 14px;
+  cursor: pointer; border: 2px solid transparent; transition: border-color .15s;
+}
+.cat-card:hover { border-color: var(--accent); }
+.cat-name { font-weight: 700; margin-bottom: 3px; }
+.cat-count { font-size: .78rem; color: var(--muted); }
+
+/* search */
+.search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.search-in {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 11px 14px; color: var(--text);
+  font-size: 1rem; outline: none;
+}
+.search-in:focus { border-color: var(--accent); }
+.search-res {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px; font-size: .95rem; line-height: 1.65;
+  margin-top: 4px;
+}
+
+/* priority sections */
+.pri-sec { margin-bottom: 22px; }
+.pri-hdr { display: flex; align-items: center; gap: 8px; font-weight: 700;
+  font-size: .97rem; margin-bottom: 10px; }
+
+/* back link */
+.back-btn { background: none; border: none; color: var(--accent-light);
+  cursor: pointer; font-size: .88rem; padding: 0 0 12px; display: block; }
+
+/* add-category row */
+.addcat-row { display: flex; gap: 8px; margin-top: 8px; }
+.addcat-in {
+  flex: 1; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--rs); padding: 9px 12px; color: var(--text); font-size: .9rem; outline: none;
+}
+.addcat-btn {
+  padding: 9px 14px; border-radius: var(--rs); border: none;
+  background: var(--accent); color: #fff; font-size: .9rem; cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .frow { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+<div id="recBanner">🎙️ Aan het luisteren — spreek nu</div>
+
+<div class="hdr">
+  <div class="hdr-top">
+    <h1>🧠 Extern Brein</h1>
+    <button onclick="refreshData()" title="Vernieuwen">↻</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-inbox"    onclick="go('inbox')">📥 Inbox</button>
+    <button class="tab"        id="tab-all"      onclick="go('all')">📋 Alles</button>
+    <button class="tab"        id="tab-duration" onclick="go('duration')">⏱️ Duur</button>
+    <button class="tab"        id="tab-category" onclick="go('category')">🗂️ Categorie</button>
+    <button class="tab"        id="tab-priority" onclick="go('priority')">🎯 Prioriteit</button>
+    <button class="tab"        id="tab-search"   onclick="go('search')">🔍 Zoeken</button>
+  </div>
+</div>
+
+<div class="content" id="main"></div>
+
+<div class="bottom">
+  <!-- AI voorstel panel -->
+  <div class="ai-panel" id="aiPanel">
+    <div class="ai-label">✨ AI Voorstel</div>
+    <div class="ai-text" id="aiText"></div>
+    <div class="ai-tags" id="aiTags"></div>
+
+    <div class="edit-form" id="editForm">
+      <div class="frow">
+        <div class="fg">
+          <span class="flabel">Type</span>
+          <select id="eType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option></select>
+        </div>
+        <div class="fg">
+          <span class="flabel">Prioriteit</span>
+          <select id="ePri">
+            <option value="hoog">🔴 Hoog</option>
+            <option value="gemiddeld">🟡 Gemiddeld</option>
+            <option value="laag">🟢 Laag</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg">
+          <span class="flabel">Categorie</span>
+          <select id="eCat"></select>
+        </div>
+        <div class="fg">
+          <span class="flabel">Tijdsduur</span>
+          <select id="eDur">
+            <option value="">— onbekend</option>
+            <option value="15 min">15 min</option>
+            <option value="30 min">30 min</option>
+            <option value="1 uur">1 uur</option>
+            <option value="meer dan 1 uur">Meer dan 1 uur</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:8px">
+        <span class="flabel">Tekst aanpassen</span>
+        <textarea class="finput" id="eContent" rows="2"></textarea>
+      </div>
+    </div>
+
+    <div class="ai-btns">
+      <button class="btn-ok"          onclick="approveItem()">✅ Goedkeuren</button>
+      <button class="btn-edit-toggle" id="editToggle" onclick="toggleEdit()">✏️</button>
+      <button class="btn-discard"     onclick="discardItem()">✕</button>
+    </div>
+  </div>
+
+  <div class="input-row">
+    <textarea id="mainInput" class="main-input" rows="1"
+      placeholder="Spreek of typ een taak / notitie..."
+      oninput="autoresize(this)"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"
+    ></textarea>
+    <button class="btn-round btn-mic" id="micBtn" onclick="toggleMic()">🎙️</button>
+    <button class="btn-round btn-send" onclick="send()">→</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  CONFIG  — vul hier je sleutels in
+// ════════════════════════════════════════════════════
+const ANTHROPIC_KEY  = 'YOUR_ANTHROPIC_API_KEY_HERE';
+const SHEETS_URL     = 'YOUR_APPS_SCRIPT_URL_HERE';   // volgt later
+
+// ════════════════════════════════════════════════════
+//  CATEGORIEËN (persistent via localStorage)
+// ════════════════════════════════════════════════════
+const DEFAULT_CATS = ['Computer & tech','Huishouden','Werk','Koken & eten',
+                      'Joa','Persoonlijk','Fotografie','Financiën'];
+let cats = JSON.parse(localStorage.getItem('eb_cats') || 'null') || [...DEFAULT_CATS];
+function saveCats() { localStorage.setItem('eb_cats', JSON.stringify(cats)); }
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+const S = {
+  items: [],
+  view: 'inbox',
+  pending: null,
+  editOpen: false,
+  durFilter: null,
+  catFilter: null,
+};
+
+// ════════════════════════════════════════════════════
+//  GOOGLE SHEETS PROXY
+// ════════════════════════════════════════════════════
+function sheetsReady() { return SHEETS_URL && !SHEETS_URL.includes('YOUR_'); }
+
+async function sheetGet() {
+  if (!sheetsReady()) return localGet();
+  try {
+    const r = await fetch(`${SHEETS_URL}?action=getAll`);
+    const d = await r.json();
+    return Array.isArray(d) ? d : [];
+  } catch { toast('⚠️ Laden mislukt — demo modus'); return localGet(); }
+}
+
+async function sheetAdd(item) {
+  if (!sheetsReady()) { localAdd(item); return item; }
+  try {
+    const r = await fetch(SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'add', item})
+    });
+    return await r.json();
+  } catch { toast('⚠️ Opslaan mislukt'); return null; }
+}
+
+async function sheetUpdate(id, upd) {
+  if (!sheetsReady()) { localUpdate(id, upd); return; }
+  try {
+    await fetch(SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'update', id, updates: upd})
+    });
+  } catch { toast('⚠️ Update mislukt'); }
+}
+
+async function sheetDelete(id) {
+  if (!sheetsReady()) { localDelete(id); return; }
+  try {
+    await fetch(SHEETS_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'delete', id})
+    });
+  } catch { toast('⚠️ Verwijderen mislukt'); }
+}
+
+// Local fallback (localStorage)
+function localGet() {
+  return JSON.parse(localStorage.getItem('eb_items') || '[]');
+}
+function localSave() { localStorage.setItem('eb_items', JSON.stringify(S.items)); }
+function localAdd(item) { S.items.unshift(item); localSave(); render(); }
+function localUpdate(id, upd) {
+  const i = S.items.find(x => x.ID === id);
+  if (i) Object.assign(i, upd);
+  localSave(); render();
+}
+function localDelete(id) { S.items = S.items.filter(x => x.ID !== id); localSave(); render(); }
+
+// ════════════════════════════════════════════════════
+//  ANTHROPIC AI
+// ════════════════════════════════════════════════════
+async function aiAnalyze(text) {
+  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.includes('YOUR_')) return mockAnalyze(text);
+  const prompt = `Analyseer de volgende invoer van iemand met ADD en geef een JSON-object terug.
+
+Invoer: "${text}"
+
+Geef ALLEEN een geldig JSON-object, geen uitleg:
+{
+  "type": "taak" of "notitie",
+  "categorie": een van [${cats.join(', ')}],
+  "tijdsduur": "15 min" | "30 min" | "1 uur" | "meer dan 1 uur" | "",
+  "prioriteit": "hoog" | "gemiddeld" | "laag",
+  "samenvatting": kort en helder geformuleerde versie van de invoer (max 120 tekens)
+}`;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{role:'user', content: prompt}]
+      })
+    });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const raw = d.content[0].text.trim();
+    const m = raw.match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : mockAnalyze(text);
+  } catch(e) { console.error('AI analyse:', e); return mockAnalyze(text); }
+}
+
+function mockAnalyze(text) {
+  return { type:'taak', categorie: cats[0], tijdsduur:'', prioriteit:'gemiddeld',
+           samenvatting: text.substring(0, 120) };
+}
+
+async function aiSearch(query) {
+  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.includes('YOUR_')) {
+    return `(AI niet geconfigureerd) Zoekterm: "${query}"`;
+  }
+  const list = S.items.map(i =>
+    `[${i.ID}] ${i.Type}: ${i.Inhoud} (${i.Categorie || '?'}, ${i.Datum || '?'})`
+  ).join('\n');
+  const prompt = `Je bent een persoonlijke assistent. Beantwoord de volgende zoekvraag aan de hand van de items. Spreek Nederlands, wees beknopt en vriendelijk.\n\nVraag: "${query}"\n\nItems:\n${list}`;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers: {
+        'Content-Type':'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 500,
+        messages: [{role:'user', content: prompt}]
+      })
+    });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    return d.content[0].text.trim();
+  } catch(e) { return 'Kon AI niet bereiken. Controleer je API-sleutel.'; }
+}
+
+// ════════════════════════════════════════════════════
+//  SPRAAK — INVOER
+// ════════════════════════════════════════════════════
+let rec = null, recActive = false;
+
+function initRec(onResult, onEnd) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'nl-NL'; r.continuous = false; r.interimResults = true;
+  r.onresult = e => {
+    const t = Array.from(e.results).map(x => x[0].transcript).join('');
+    onResult(t);
+  };
+  r.onend = () => { recActive = false; onEnd(); };
+  r.onerror = ev => { recActive = false; onEnd(); if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error); };
+  return r;
+}
+
+function toggleMic() {
+  if (recActive) { rec && rec.stop(); return; }
+  if (!rec) {
+    rec = initRec(
+      t => { document.getElementById('mainInput').value = t; autoresize(document.getElementById('mainInput')); },
+      () => {
+        document.getElementById('micBtn').classList.remove('on');
+        document.getElementById('micBtn').textContent = '🎙️';
+        document.getElementById('recBanner').classList.remove('on');
+        const v = document.getElementById('mainInput').value.trim();
+        if (v) send();
+      }
+    );
+  }
+  if (!rec) { toast('Spraak niet beschikbaar in deze browser'); return; }
+  document.getElementById('mainInput').value = '';
+  recActive = true;
+  document.getElementById('micBtn').classList.add('on');
+  document.getElementById('micBtn').textContent = '⏹️';
+  document.getElementById('recBanner').classList.add('on');
+  rec.start();
+}
+
+// ════════════════════════════════════════════════════
+//  INVOER VERWERKEN
+// ════════════════════════════════════════════════════
+async function send() {
+  const el = document.getElementById('mainInput');
+  const txt = el.value.trim();
+  if (!txt) return;
+  el.value = ''; autoresize(el);
+
+  // show loading state in panel
+  const panel = document.getElementById('aiPanel');
+  document.getElementById('aiText').innerHTML =
+    `<span style="color:var(--muted)">${esc(txt.substring(0,60))}${txt.length>60?'…':''}</span>`;
+  document.getElementById('aiTags').innerHTML =
+    '<span class="loading"><span class="spin"></span> AI analyseert…</span>';
+  document.getElementById('editForm').classList.remove('on');
+  S.editOpen = false;
+  panel.classList.add('on');
+
+  const sug = await aiAnalyze(txt);
+  showSuggestion(txt, sug);
+}
+
+function showSuggestion(orig, sug) {
+  S.pending = {
+    ID: uid(), Datum: today(), Type: sug.type || 'taak',
+    Inhoud: sug.samenvatting || orig,
+    Categorie: sug.categorie || cats[0],
+    Tijdsduur: sug.tijdsduur || '',
+    Prioriteit: sug.prioriteit || 'gemiddeld',
+    Status: 'open',
+    AI_voorstel_categorie: sug.categorie || '',
+    AI_voorstel_tijdsduur: sug.tijdsduur || '',
+    Goedgekeurd: 'false',
+  };
+
+  document.getElementById('aiText').textContent = S.pending.Inhoud;
+
+  const pc = { hoog:'t-hi', gemiddeld:'t-mid', laag:'t-lo' };
+  document.getElementById('aiTags').innerHTML =
+    `<span class="tag t-type">${S.pending.Type === 'taak' ? '✓ Taak' : '📝 Notitie'}</span>
+     <span class="tag t-cat">${S.pending.Categorie}</span>
+     ${S.pending.Tijdsduur ? `<span class="tag t-dur">⏱️ ${S.pending.Tijdsduur}</span>` : ''}
+     <span class="tag ${pc[S.pending.Prioriteit]||'t-mid'}">${priLabel(S.pending.Prioriteit)}</span>`;
+
+  fillEditForm();
+}
+
+function fillEditForm() {
+  if (!S.pending) return;
+  document.getElementById('eType').value = S.pending.Type;
+  document.getElementById('ePri').value  = S.pending.Prioriteit;
+  document.getElementById('eDur').value  = S.pending.Tijdsduur || '';
+  document.getElementById('eContent').value = S.pending.Inhoud;
+  const cs = document.getElementById('eCat');
+  cs.innerHTML = cats.map(c =>
+    `<option value="${c}" ${c===S.pending.Categorie?'selected':''}>${c}</option>`).join('');
+}
+
+function toggleEdit() {
+  S.editOpen = !S.editOpen;
+  document.getElementById('editForm').classList.toggle('on', S.editOpen);
+  document.getElementById('editToggle').textContent = S.editOpen ? '↑' : '✏️';
+}
+
+async function approveItem() {
+  if (!S.pending) return;
+  if (S.editOpen) {
+    S.pending.Type      = document.getElementById('eType').value;
+    S.pending.Prioriteit= document.getElementById('ePri').value;
+    S.pending.Categorie = document.getElementById('eCat').value;
+    S.pending.Tijdsduur = document.getElementById('eDur').value;
+    S.pending.Inhoud    = document.getElementById('eContent').value.trim() || S.pending.Inhoud;
+  }
+  S.pending.Goedgekeurd = 'true';
+  const item = { ...S.pending };
+  closePanel();
+  toast('✅ Opgeslagen!');
+  const saved = await sheetAdd(item);
+  if (saved) { S.items.unshift(saved); } else { S.items.unshift(item); }
+  updateBadge(); render();
+}
+
+function discardItem() { closePanel(); }
+function closePanel() {
+  S.pending = null; S.editOpen = false;
+  document.getElementById('aiPanel').classList.remove('on');
+  document.getElementById('editForm').classList.remove('on');
+  document.getElementById('editToggle').textContent = '✏️';
+}
+
+// ════════════════════════════════════════════════════
+//  NAVIGATIE
+// ════════════════════════════════════════════════════
+function go(v) {
+  S.view = v; S.durFilter = null; S.catFilter = null;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + v)?.classList.add('active');
+  render();
+}
+
+function render() {
+  updateBadge();
+  switch (S.view) {
+    case 'inbox':    renderInbox();    break;
+    case 'all':      renderAll();      break;
+    case 'duration': renderDuration(); break;
+    case 'category': renderCategory(); break;
+    case 'priority': renderPriority(); break;
+    case 'search':   renderSearch();   break;
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  VIEWS
+// ════════════════════════════════════════════════════
+function renderInbox() {
+  const items = S.items.filter(i => i.Goedgekeurd === 'false' || i.Goedgekeurd === false);
+  const el = document.getElementById('main');
+  if (!items.length) { el.innerHTML = empty('📥','Inbox is leeg — goed bezig!'); return; }
+  el.innerHTML =
+    `<div class="sec">${items.length} wacht${items.length===1?'':'en'} op goedkeuring</div>` +
+    items.map(i => card(i, true)).join('');
+}
+
+function renderAll() {
+  const items = approved();
+  const el = document.getElementById('main');
+  if (!items.length) { el.innerHTML = empty('📋','Nog geen goedgekeurde items'); return; }
+  el.innerHTML =
+    `<div class="sec">${items.length} items totaal</div>` +
+    items.map(i => card(i)).join('');
+}
+
+function renderDuration() {
+  const DURS = ['15 min','30 min','1 uur','meer dan 1 uur'];
+  const all = approved();
+  let html = `<div class="chips">
+    ${DURS.map(d=>`<button class="chip ${S.durFilter===d?'on':''}" onclick="setDur('${d}')">${d}</button>`).join('')}
+    <button class="chip ${S.durFilter===''?'on':''}" onclick="setDur('')">Onbekend</button>
+  </div>`;
+  const shown = S.durFilter !== null ? all.filter(i=>(i.Tijdsduur||'')===S.durFilter) : all;
+  html += shown.length ? shown.map(i=>card(i)).join('') : empty('⏱️', S.durFilter!==null ? 'Geen items met deze duur':'Selecteer een tijdsduur');
+  document.getElementById('main').innerHTML = html;
+}
+function setDur(d) { S.durFilter = d; renderDuration(); }
+
+function renderCategory() {
+  const el = document.getElementById('main');
+  const all = approved();
+  if (!S.catFilter) {
+    const cnt = {};
+    all.forEach(i => { cnt[i.Categorie] = (cnt[i.Categorie]||0)+1; });
+    const allCats = [...new Set([...cats, ...all.map(i=>i.Categorie)])].filter(Boolean);
+    let html = `<div class="cat-grid">` +
+      allCats.map(c => `<div class="cat-card" onclick="setCat('${esc(c)}')">
+        <div class="cat-name">${catEmoji(c)} ${c}</div>
+        <div class="cat-count">${cnt[c]||0} items</div>
+      </div>`).join('') + `</div>`;
+    // add custom category
+    html += `<div class="sec">Nieuwe categorie toevoegen</div>
+      <div class="addcat-row">
+        <input class="addcat-in" id="newCatIn" placeholder="Naam…" onkeydown="if(event.key==='Enter')addCat()">
+        <button class="addcat-btn" onclick="addCat()">+ Toevoegen</button>
+      </div>`;
+    el.innerHTML = html;
+  } else {
+    const items = all.filter(i => i.Categorie === S.catFilter);
+    el.innerHTML =
+      `<button class="back-btn" onclick="setCat(null)">← Alle categorieën</button>
+       <div class="sec">${catEmoji(S.catFilter)} ${S.catFilter} — ${items.length} items</div>` +
+      (items.length ? items.map(i=>card(i)).join('') : empty('🗂️','Geen items'));
+  }
+}
+function setCat(c) { S.catFilter = c; renderCategory(); }
+function addCat() {
+  const v = document.getElementById('newCatIn')?.value.trim();
+  if (!v || cats.includes(v)) { toast(cats.includes(v)?'Bestaat al':'Voer een naam in'); return; }
+  cats.push(v); saveCats(); toast('✅ Categorie toegevoegd'); renderCategory();
+}
+
+function renderPriority() {
+  const all = approved();
+  const pris = [
+    {k:'hoog',    l:'🔴 Hoog',      col:'var(--danger)'},
+    {k:'gemiddeld',l:'🟡 Gemiddeld', col:'var(--warning)'},
+    {k:'laag',    l:'🟢 Laag',      col:'var(--success)'},
+  ];
+  let html = '';
+  pris.forEach(({k,l,col}) => {
+    const its = all.filter(i => i.Prioriteit === k);
+    if (!its.length) return;
+    html += `<div class="pri-sec">
+      <div class="pri-hdr" style="color:${col}">${l} (${its.length})</div>
+      ${its.map(i=>card(i)).join('')}
+    </div>`;
+  });
+  document.getElementById('main').innerHTML = html || empty('🎯','Geen items');
+}
+
+function renderSearch() {
+  document.getElementById('main').innerHTML = `
+    <div class="search-row">
+      <input id="sIn" class="search-in" placeholder="Stel een vraag of zoek iets…"
+        onkeydown="if(event.key==='Enter') doSearch()">
+      <button class="btn-round btn-mic" id="sMic" onclick="toggleSearchMic()"
+        style="width:46px;height:46px;border-radius:50%;border:none;background:var(--surface);color:var(--text);font-size:1.2rem;cursor:pointer;flex-shrink:0">🎙️</button>
+      <button class="btn-round btn-send" onclick="doSearch()"
+        style="width:46px;height:46px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:1rem;cursor:pointer;flex-shrink:0">→</button>
+    </div>
+    <div id="sRes"></div>`;
+}
+
+let srec = null;
+function toggleSearchMic() {
+  if (!srec) {
+    srec = initRec(
+      t => { if(document.getElementById('sIn')) document.getElementById('sIn').value = t; },
+      () => {
+        const mb = document.getElementById('sMic');
+        if(mb) { mb.textContent='🎙️'; mb.style.background='var(--surface)'; }
+        const v = document.getElementById('sIn')?.value.trim();
+        if(v) doSearch();
+      }
+    );
+  }
+  if (!srec) { toast('Spraak niet beschikbaar'); return; }
+  const mb = document.getElementById('sMic');
+  mb.textContent = '⏹️'; mb.style.background = 'var(--danger)';
+  srec.start();
+}
+
+async function doSearch() {
+  const q = document.getElementById('sIn')?.value.trim();
+  if (!q) return;
+  const res = document.getElementById('sRes');
+  if (!res) return;
+  res.innerHTML = '<div class="loading"><span class="spin"></span> Zoeken…</div>';
+  const answer = await aiSearch(q);
+  res.innerHTML = `<div class="search-res">${answer.replace(/\n/g,'<br>')}</div>`;
+}
+
+// ════════════════════════════════════════════════════
+//  ITEM CARD
+// ════════════════════════════════════════════════════
+function card(item, inboxMode=false) {
+  const isApproved = item.Goedgekeurd === 'true' || item.Goedgekeurd === true;
+  const isDone = item.Status === 'gedaan';
+  const pc = isApproved ? `p-${item.Prioriteit}` : 'inbox-item';
+  const doneClass = isDone ? 'done-item' : '';
+  const typeIcon = item.Type === 'taak' ? '☑️' : '📝';
+
+  return `<div class="item ${pc} ${doneClass}" id="c${item.ID}">
+    <div class="item-head">
+      <span class="item-type-icon">${typeIcon}</span>
+      <span class="item-body">${esc(item.Inhoud)}</span>
+    </div>
+    <div class="item-meta">
+      ${item.Categorie ? `<span class="mtag">${catEmoji(item.Categorie)} ${item.Categorie}</span>` : ''}
+      ${item.Tijdsduur ? `<span class="mtag">⏱️ ${item.Tijdsduur}</span>` : ''}
+      ${item.Prioriteit ? `<span class="mtag">${priLabel(item.Prioriteit)}</span>` : ''}
+      ${item.Datum ? `<span class="mtag">${fmtDate(item.Datum)}</span>` : ''}
+    </div>
+    <div class="item-actions">
+      ${inboxMode ? `<button class="btn-xs bx-ok" onclick="quickApprove('${item.ID}')">✅ Goedkeuren</button>` : ''}
+      ${item.Type==='taak' ? `<button class="btn-xs bx-done ${isDone?'done':''}" onclick="toggleDone('${item.ID}')">${isDone?'↩️ Heropenen':'✓ Klaar'}</button>` : ''}
+      <button class="btn-xs bx-del" onclick="delItem('${item.ID}')">🗑️</button>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════
+//  ITEM ACTIES
+// ════════════════════════════════════════════════════
+async function quickApprove(id) {
+  await sheetUpdate(id, {Goedgekeurd:'true'});
+  const i = S.items.find(x=>x.ID===id);
+  if(i) i.Goedgekeurd = 'true';
+  toast('✅ Goedgekeurd!'); updateBadge(); render();
+}
+
+async function toggleDone(id) {
+  const i = S.items.find(x=>x.ID===id);
+  if (!i) return;
+  const ns = i.Status==='gedaan' ? 'open' : 'gedaan';
+  await sheetUpdate(id, {Status: ns});
+  i.Status = ns;
+  toast(ns==='gedaan' ? '✓ Afgevinkt!' : '↩️ Heropend');
+  render();
+}
+
+async function delItem(id) {
+  if (!confirm('Item verwijderen?')) return;
+  await sheetDelete(id);
+  S.items = S.items.filter(x=>x.ID!==id);
+  toast('🗑️ Verwijderd'); updateBadge(); render();
+}
+
+// ════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════
+function approved()  { return S.items.filter(i => i.Goedgekeurd==='true' || i.Goedgekeurd===true); }
+function uid()       { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function today()     { return new Date().toISOString().split('T')[0]; }
+function esc(s)      { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function priLabel(p) { return p==='hoog'?'🔴 Hoog':p==='gemiddeld'?'🟡 Gemiddeld':'🟢 Laag'; }
+function fmtDate(d)  {
+  if (!d) return '';
+  const dt = new Date(d), now = new Date();
+  if (dt.toDateString()===now.toDateString()) return 'Vandaag';
+  const y = new Date(now); y.setDate(now.getDate()-1);
+  if (dt.toDateString()===y.toDateString()) return 'Gisteren';
+  return dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+}
+function catEmoji(c) {
+  const m = {'Computer & tech':'💻','Huishouden':'🏠','Werk':'💼',
+             'Koken & eten':'🍳','Joa':'💛','Persoonlijk':'🧍',
+             'Fotografie':'📷','Financiën':'💰'};
+  return m[c] || '📌';
+}
+function empty(icon, txt) {
+  return `<div class="empty"><div class="ei">${icon}</div><div class="et">${txt}</div></div>`;
+}
+function autoresize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+
+let toastTimer;
+function toast(msg, ms=2200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function updateBadge() {
+  const n = S.items.filter(i => i.Goedgekeurd==='false'||i.Goedgekeurd===false).length;
+  const tab = document.getElementById('tab-inbox');
+  let b = tab.querySelector('.badge');
+  if (n > 0) {
+    if (!b) { b = document.createElement('span'); b.className='badge'; tab.appendChild(b); }
+    b.textContent = n;
+  } else if (b) { b.remove(); }
+}
+
+async function refreshData() {
+  toast('↻ Ophalen…');
+  S.items = await sheetGet();
+  updateBadge(); render(); toast('✓ Bijgewerkt!');
+}
+
+// ════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════
+async function init() {
+  document.getElementById('main').innerHTML =
+    '<div class="loading"><span class="spin"></span> Laden…</div>';
+  S.items = await sheetGet();
+  updateBadge();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
