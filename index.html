@@ -498,7 +498,7 @@ async function sheetAdd(item) {
   }
   try {
     const r = await fetch(SHEETS_URL, {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST',
       body: JSON.stringify({action:'add', item})
     });
     return await r.json();
@@ -509,7 +509,7 @@ async function sheetUpdate(id, upd) {
   if (!sheetsReady()) { localUpdate(id, upd); return; }
   try {
     await fetch(SHEETS_URL, {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST',
       body: JSON.stringify({action:'update', id, updates: upd})
     });
   } catch { toast('⚠️ Update mislukt'); }
@@ -519,7 +519,7 @@ async function sheetDelete(id) {
   if (!sheetsReady()) { localDelete(id); return; }
   try {
     await fetch(SHEETS_URL, {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST',
       body: JSON.stringify({action:'delete', id})
     });
   } catch { toast('⚠️ Verwijderen mislukt'); }
