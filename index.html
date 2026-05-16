@@ -134,7 +134,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .main-input {
   flex: 1; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); padding: 11px 14px; color: var(--text);
-  font-size: 1rem; resize: none; min-height: 46px; max-height: 120px;
+  font-size: 1rem; resize: none; min-height: 46px;
   outline: none; transition: border-color .18s; font-family: inherit;
 }
 .main-input:focus { border-color: var(--accent); }
@@ -146,6 +146,13 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .btn-mic.on { background: var(--danger); animation: pulse .9s ease-in-out infinite; }
 .btn-send { background: var(--accent); color: #fff; }
 @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.08); } }
+.ie-mic-btn {
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: var(--surface); color: var(--text); font-size: .85rem;
+  cursor: pointer; flex-shrink: 0; display: inline-flex;
+  align-items: center; justify-content: center; transition: background .18s;
+}
+.ie-mic-btn.on { background: var(--danger); animation: pulse .9s ease-in-out infinite; }
 
 /* ── ITEMS ── */
 .item {
@@ -330,7 +337,10 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
       </div>
     </div>
     <div class="fg" style="margin-bottom:14px">
-      <span class="flabel">Tekst</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <span class="flabel" style="margin-bottom:0">Tekst</span>
+        <button class="ie-mic-btn" id="ieMicBtn" onclick="toggleIeMic()">🎙️</button>
+      </div>
       <textarea class="finput" id="ieContent" rows="2"></textarea>
     </div>
     <div class="cfg-btns">
@@ -534,17 +544,27 @@ function localDelete(id) { S.items = S.items.filter(x => x.ID !== id); localSave
 async function aiAnalyze(text) {
   const ANTHROPIC_KEY = getApiKey();
   if (!ANTHROPIC_KEY) return mockAnalyze(text);
-  const prompt = `Analyseer de volgende invoer van iemand met ADD en geef een JSON-object terug.
+  const prompt = `Je bent een slim assistent die taken en notities categoriseert.
 
-Invoer: "${text}"
+Analyseer deze invoer: "${text}"
 
-Geef ALLEEN een geldig JSON-object, geen uitleg:
+Kies de meest passende categorie op basis van de inhoud. Categorieën:
+- Computer & tech → ALLEEN voor: software installeren, app problemen, code schrijven, website bouwen, computer/telefoon repareren, printer, wifi instellen
+- Huishouden → schoonmaken, stofzuigen, boodschappen, was doen, opruimen, reparatie huis, tuin, meubels
+- Werk → vergadering plannen, project afronden, deadline, klant bellen, zakelijke e-mail, rapport schrijven
+- Koken & eten → recept opzoeken, koken, ingrediënten halen, restaurant reserveren, maaltijd plannen
+- Joa → alles wat specifiek over de persoon Joa gaat
+- Persoonlijk → gezondheid, sport, dokter, tandarts, hobby, vrienden, familie, slaap, welzijn
+- Fotografie → foto's maken, camera instellen, foto bewerken, lenzen, Lightroom, shoot plannen
+- Financiën → rekening betalen, belasting regelen, budget bijhouden, bankafschrift, verzekering
+
+Geef ALLEEN dit JSON terug, geen uitleg:
 {
   "type": "taak" of "notitie",
   "categorie": een van [${cats.join(', ')}],
   "tijdsduur": "7,5 min" | "15 min" | "30 min" | "1 uur" | "meer dan 1 uur" | "",
   "prioriteit": "hoog" | "gemiddeld" | "laag",
-  "samenvatting": kort en helder geformuleerde versie van de invoer (max 120 tekens)
+  "samenvatting": beknopte herformulering van de invoer als actie of feit
 }`;
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -606,7 +626,7 @@ async function aiSearch(query) {
 // ════════════════════════════════════════════════════
 //  SPRAAK — INVOER
 // ════════════════════════════════════════════════════
-let rec = null, recActive = false, preMicText = '', recRestartTimer = null;
+let rec = null, recActive = false, preMicText = '', recRestartTimer = null, silenceTimer = null;
 
 function startRec() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -625,12 +645,19 @@ function startRec() {
     if (finals) {
       preMicText = combined;
       rec.stop();
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (recActive) {
+          recActive = false;
+          clearTimeout(recRestartTimer);
+          if (rec) { try { rec.stop(); } catch(e) {} }
+        }
+      }, 2000);
     }
   };
 
   rec.onend = () => {
     if (recActive) {
-      // Korte pauze zodat echo niet wordt opgepikt, dan herstarten
       recRestartTimer = setTimeout(() => { if (recActive) startRec(); }, 1200);
     } else {
       stopRecUI();
@@ -644,7 +671,7 @@ function startRec() {
       if (recActive) recRestartTimer = setTimeout(() => { if (recActive) startRec(); }, 800);
       return;
     }
-    recActive = false; clearTimeout(recRestartTimer);
+    recActive = false; clearTimeout(recRestartTimer); clearTimeout(silenceTimer);
     stopRecUI();
     if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
   };
@@ -660,7 +687,7 @@ function stopRecUI() {
 
 function toggleMic() {
   if (recActive) {
-    recActive = false; clearTimeout(recRestartTimer);
+    recActive = false; clearTimeout(recRestartTimer); clearTimeout(silenceTimer);
     if (rec) { try { rec.stop(); } catch(e) {} }
     return;
   }
@@ -914,7 +941,7 @@ function renderSearch() {
     <div id="sRes"></div>`;
 }
 
-let srec = null, srecActive = false, srecRestartTimer = null, preSrecText = '';
+let srec = null, srecActive = false, srecRestartTimer = null, preSrecText = '', srecSilenceTimer = null;
 
 function startSearchRec() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -928,7 +955,17 @@ function startSearchRec() {
     const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
     const t = [finals, interim].filter(Boolean).join(' ').trim();
     if (document.getElementById('sIn')) document.getElementById('sIn').value = t;
-    if (finals) { preSrecText = t; srec.stop(); }
+    if (finals) {
+      preSrecText = t; srec.stop();
+      clearTimeout(srecSilenceTimer);
+      srecSilenceTimer = setTimeout(() => {
+        if (srecActive) {
+          srecActive = false;
+          clearTimeout(srecRestartTimer);
+          if (srec) { try { srec.stop(); } catch(e) {} }
+        }
+      }, 2000);
+    }
   };
 
   srec.onend = () => {
@@ -947,7 +984,7 @@ function startSearchRec() {
       if (srecActive) srecRestartTimer = setTimeout(() => { if (srecActive) startSearchRec(); }, 800);
       return;
     }
-    srecActive = false; clearTimeout(srecRestartTimer);
+    srecActive = false; clearTimeout(srecRestartTimer); clearTimeout(srecSilenceTimer);
     const mb = document.getElementById('sMic');
     if (mb) { mb.textContent = '🎙️'; mb.style.background = 'var(--surface)'; }
     if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
@@ -958,7 +995,7 @@ function startSearchRec() {
 
 function toggleSearchMic() {
   if (srecActive) {
-    srecActive = false; clearTimeout(srecRestartTimer);
+    srecActive = false; clearTimeout(srecRestartTimer); clearTimeout(srecSilenceTimer);
     if (srec) { try { srec.stop(); } catch(e) {} }
     return;
   }
@@ -1038,6 +1075,82 @@ async function delItem(id) {
 }
 
 // ════════════════════════════════════════════════════
+//  SPRAAK — BEWERKEN
+// ════════════════════════════════════════════════════
+let ierec = null, ierecActive = false, ierecRestartTimer = null, ierecSilenceTimer = null;
+
+function startIeRec() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (ierec) { try { ierec.abort(); } catch(e) {} }
+  ierec = new SR();
+  ierec.lang = 'nl-NL'; ierec.continuous = false; ierec.interimResults = true;
+  let preText = document.getElementById('ieContent')?.value || '';
+
+  ierec.onresult = e => {
+    const finals = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ');
+    const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
+    const current = [finals, interim].filter(Boolean).join(' ').trim();
+    const combined = [preText, current].filter(Boolean).join(' ');
+    const ta = document.getElementById('ieContent');
+    if (ta) ta.value = combined;
+    if (finals) {
+      preText = combined;
+      ierec.stop();
+      clearTimeout(ierecSilenceTimer);
+      ierecSilenceTimer = setTimeout(() => {
+        if (ierecActive) {
+          ierecActive = false;
+          clearTimeout(ierecRestartTimer);
+          if (ierec) { try { ierec.stop(); } catch(e) {} }
+          stopIeRecUI();
+        }
+      }, 2000);
+    }
+  };
+
+  ierec.onend = () => {
+    if (ierecActive) {
+      ierecRestartTimer = setTimeout(() => { if (ierecActive) startIeRec(); }, 1200);
+    } else {
+      stopIeRecUI();
+    }
+  };
+
+  ierec.onerror = ev => {
+    if (ev.error === 'no-speech') {
+      if (ierecActive) ierecRestartTimer = setTimeout(() => { if (ierecActive) startIeRec(); }, 800);
+      return;
+    }
+    ierecActive = false; clearTimeout(ierecRestartTimer); clearTimeout(ierecSilenceTimer);
+    stopIeRecUI();
+    if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
+  };
+
+  try { ierec.start(); } catch(e) {}
+}
+
+function stopIeRecUI() {
+  const btn = document.getElementById('ieMicBtn');
+  if (btn) { btn.classList.remove('on'); btn.textContent = '🎙️'; }
+}
+
+function toggleIeMic() {
+  if (ierecActive) {
+    ierecActive = false; clearTimeout(ierecRestartTimer); clearTimeout(ierecSilenceTimer);
+    if (ierec) { try { ierec.stop(); } catch(e) {} }
+    stopIeRecUI();
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('Spraak niet beschikbaar in deze browser'); return; }
+  ierecActive = true;
+  const btn = document.getElementById('ieMicBtn');
+  if (btn) { btn.classList.add('on'); btn.textContent = '⏹️'; }
+  startIeRec();
+}
+
+// ════════════════════════════════════════════════════
 //  ITEM BEWERKEN
 // ════════════════════════════════════════════════════
 let ieId = null;
@@ -1057,6 +1170,11 @@ function showItemEdit(id) {
 }
 
 function hideItemEdit() {
+  if (ierecActive) {
+    ierecActive = false; clearTimeout(ierecRestartTimer); clearTimeout(ierecSilenceTimer);
+    if (ierec) { try { ierec.stop(); } catch(e) {} }
+    stopIeRecUI();
+  }
   ieId = null;
   document.getElementById('ieOverlay').classList.remove('on');
 }
@@ -1104,7 +1222,7 @@ function catEmoji(c) {
 function empty(icon, txt) {
   return `<div class="empty"><div class="ei">${icon}</div><div class="et">${txt}</div></div>`;
 }
-function autoresize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function autoresize(el) { el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
 
 let toastTimer;
 function toast(msg, ms=2200) {
