@@ -134,7 +134,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .main-input {
   flex: 1; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); padding: 11px 14px; color: var(--text);
-  font-size: 1rem; resize: none; min-height: 46px;
+  font-size: 1rem; resize: none; min-height: 46px; max-height: 120px;
   outline: none; transition: border-color .18s; font-family: inherit;
 }
 .main-input:focus { border-color: var(--accent); }
@@ -146,13 +146,6 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .btn-mic.on { background: var(--danger); animation: pulse .9s ease-in-out infinite; }
 .btn-send { background: var(--accent); color: #fff; }
 @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.08); } }
-.ie-mic-btn {
-  width: 28px; height: 28px; border-radius: 50%; border: none;
-  background: var(--surface); color: var(--text); font-size: .85rem;
-  cursor: pointer; flex-shrink: 0; display: inline-flex;
-  align-items: center; justify-content: center; transition: background .18s;
-}
-.ie-mic-btn.on { background: var(--danger); animation: pulse .9s ease-in-out infinite; }
 
 /* ── ITEMS ── */
 .item {
@@ -178,38 +171,10 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
   padding: 6px 11px; border-radius: var(--rs); border: none;
   font-size: .78rem; cursor: pointer; font-weight: 600; transition: opacity .15s;
 }
-.bx-ok   { background: var(--success); color: #fff; }
+.bx-ok  { background: var(--success); color: #fff; }
 .bx-done { background: transparent; border: 1px solid var(--muted); color: var(--muted); }
 .bx-done.done { background: var(--success); border-color: var(--success); color: #fff; }
-.bx-del  { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
-.bx-edit { background: transparent; border: 1px solid var(--accent-light); color: var(--accent-light); }
-
-/* ── CONFIG OVERLAY ── */
-.cfg-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.8);
-  z-index: 300; display: none; align-items: center; justify-content: center; padding: 24px;
-}
-.cfg-overlay.on { display: flex; }
-.cfg-box {
-  background: var(--surface); border-radius: var(--r); padding: 24px;
-  width: 100%; max-width: 440px;
-}
-.cfg-title { font-weight: 800; font-size: 1.1rem; margin-bottom: 6px; }
-.cfg-sub { font-size: .85rem; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
-.cfg-label { font-size: .72rem; color: var(--muted); text-transform: uppercase;
-  letter-spacing: .05em; margin-bottom: 5px; display: block; }
-.cfg-input {
-  width: 100%; background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--rs); padding: 10px 12px; color: var(--text);
-  font-size: .95rem; outline: none; margin-bottom: 14px;
-}
-.cfg-input:focus { border-color: var(--accent); }
-.cfg-btns { display: flex; gap: 8px; }
-.cfg-save { flex: 1; padding: 11px; border-radius: var(--r); border: none;
-  background: var(--accent); color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; }
-.cfg-skip { padding: 11px 14px; border-radius: var(--r);
-  border: 1px solid var(--border); background: transparent;
-  color: var(--muted); font-size: .9rem; cursor: pointer; }
+.bx-del { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
 
 /* ── MISC ── */
 .sec { font-size: .75rem; color: var(--muted); text-transform: uppercase;
@@ -286,77 +251,11 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 <div id="toast"></div>
 <div id="recBanner">🎙️ Aan het luisteren — spreek nu</div>
 
-<!-- Config overlay -->
-<div class="cfg-overlay" id="cfgOverlay">
-  <div class="cfg-box">
-    <div class="cfg-title">⚙️ API-sleutel instellen</div>
-    <div class="cfg-sub">Voer je Anthropic API-sleutel in. Deze wordt alleen lokaal opgeslagen op dit apparaat en nooit verstuurd naar andere servers.</div>
-    <label class="cfg-label">Anthropic API-sleutel</label>
-    <input class="cfg-input" id="cfgKeyIn" type="password" placeholder="sk-ant-…"
-      onkeydown="if(event.key==='Enter') saveConfig()">
-    <div class="cfg-btns">
-      <button class="cfg-save" onclick="saveConfig()">✅ Opslaan</button>
-      <button class="cfg-skip" onclick="hideConfig()">Overslaan</button>
-    </div>
-  </div>
-</div>
-
-<!-- Item bewerken overlay -->
-<div class="cfg-overlay" id="ieOverlay">
-  <div class="cfg-box">
-    <div class="cfg-title">✏️ Item bewerken</div>
-    <div class="frow">
-      <div class="fg">
-        <span class="flabel">Type</span>
-        <select id="ieType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option></select>
-      </div>
-      <div class="fg">
-        <span class="flabel">Prioriteit</span>
-        <select id="iePri">
-          <option value="hoog">🔴 Hoog</option>
-          <option value="gemiddeld">🟡 Gemiddeld</option>
-          <option value="laag">🟢 Laag</option>
-        </select>
-      </div>
-    </div>
-    <div class="frow">
-      <div class="fg">
-        <span class="flabel">Categorie</span>
-        <select id="ieCat"></select>
-      </div>
-      <div class="fg">
-        <span class="flabel">Tijdsduur</span>
-        <select id="ieDur">
-          <option value="">— onbekend</option>
-          <option value="7,5 min">7,5 min</option>
-          <option value="15 min">15 min</option>
-          <option value="30 min">30 min</option>
-          <option value="1 uur">1 uur</option>
-          <option value="meer dan 1 uur">Meer dan 1 uur</option>
-        </select>
-      </div>
-    </div>
-    <div class="fg" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-        <span class="flabel" style="margin-bottom:0">Tekst</span>
-        <button class="ie-mic-btn" id="ieMicBtn" onclick="toggleIeMic()">🎙️</button>
-      </div>
-      <textarea class="finput" id="ieContent" rows="2"></textarea>
-    </div>
-    <div class="cfg-btns">
-      <button class="cfg-save" onclick="saveItemEdit()">✅ Opslaan</button>
-      <button class="cfg-skip" onclick="hideItemEdit()">Annuleren</button>
-    </div>
-  </div>
-</div>
-
 <div class="hdr">
   <div class="hdr-top">
     <h1>🧠 Extern Brein</h1>
-    <div style="display:flex;gap:4px">
-      <button onclick="showConfig()" title="Instellingen">⚙️</button>
-      <button onclick="refreshData()" title="Vernieuwen">↻</button>
-    </div>
+    <button onclick="configApiKey()" title="API-sleutel instellen">⚙️</button>
+    <button onclick="refreshData()" title="Vernieuwen">↻</button>
   </div>
   <div class="tabs">
     <button class="tab active" id="tab-inbox"    onclick="go('inbox')">📥 Inbox</button>
@@ -401,7 +300,6 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
           <span class="flabel">Tijdsduur</span>
           <select id="eDur">
             <option value="">— onbekend</option>
-            <option value="7,5 min">7,5 min</option>
             <option value="15 min">15 min</option>
             <option value="30 min">30 min</option>
             <option value="1 uur">1 uur</option>
@@ -437,21 +335,12 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 // ════════════════════════════════════════════════════
 //  CONFIG
 // ════════════════════════════════════════════════════
-const SHEETS_URL = 'YOUR_APPS_SCRIPT_URL_HERE';   // volgt later
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzBMjCZRkhZKdLFylOR2cYJ_gsbaOLzh4nlPjwvLnhI2XYMRtWduv59GANzh1hy2tDWsg/exec';
 function getApiKey() { return localStorage.getItem('eb_api_key') || ''; }
 function setApiKey(k) { localStorage.setItem('eb_api_key', k); }
-
-function showConfig() {
-  document.getElementById('cfgKeyIn').value = getApiKey();
-  document.getElementById('cfgOverlay').classList.add('on');
-  document.getElementById('cfgKeyIn').focus();
-}
-function hideConfig() { document.getElementById('cfgOverlay').classList.remove('on'); }
-function saveConfig() {
-  const k = document.getElementById('cfgKeyIn').value.trim();
-  setApiKey(k);
-  hideConfig();
-  if (k) toast('✅ API-sleutel opgeslagen');
+function configApiKey() {
+  const k = prompt('Anthropic API-sleutel' + (getApiKey() ? ' (al ingesteld — laat leeg om te behouden):' : ':'));
+  if (k && k.trim()) { setApiKey(k.trim()); toast('✅ API-sleutel opgeslagen'); }
 }
 
 // ════════════════════════════════════════════════════
@@ -489,13 +378,7 @@ async function sheetGet() {
 }
 
 async function sheetAdd(item) {
-  if (!sheetsReady()) {
-    // Sla op in localStorage zonder S.items te wijzigen (approveItem doet dat)
-    const stored = JSON.parse(localStorage.getItem('eb_items') || '[]');
-    stored.unshift(item);
-    localStorage.setItem('eb_items', JSON.stringify(stored));
-    return item;
-  }
+  if (!sheetsReady()) { localAdd(item); return item; }
   try {
     const r = await fetch(SHEETS_URL, {
       method:'POST',
@@ -542,21 +425,20 @@ function localDelete(id) { S.items = S.items.filter(x => x.ID !== id); localSave
 //  ANTHROPIC AI
 // ════════════════════════════════════════════════════
 async function aiAnalyze(text) {
-  const ANTHROPIC_KEY = getApiKey();
-  if (!ANTHROPIC_KEY) return mockAnalyze(text);
+  if (!getApiKey()) return mockAnalyze(text);
   const prompt = `Je bent een slim assistent die taken en notities categoriseert.
 
 Analyseer deze invoer: "${text}"
 
-Kies de meest passende categorie op basis van de inhoud. Categorieën:
-- Computer & tech → ALLEEN voor: software installeren, app problemen, code schrijven, website bouwen, computer/telefoon repareren, printer, wifi instellen
-- Huishouden → schoonmaken, stofzuigen, boodschappen, was doen, opruimen, reparatie huis, tuin, meubels
-- Werk → vergadering plannen, project afronden, deadline, klant bellen, zakelijke e-mail, rapport schrijven
-- Koken & eten → recept opzoeken, koken, ingrediënten halen, restaurant reserveren, maaltijd plannen
+Kies de meest passende categorie. Categorieën:
+- Computer & tech → ALLEEN voor: software, apps, code, pc, telefoon, printer, wifi, tech gadget
+- Huishouden → schoonmaken, boodschappen, was, opruimen, reparatie huis, tuin, meubels
+- Werk → vergadering, project, deadline, klant, collega, zakelijke e-mail, rapport
+- Koken & eten → recept, koken, ingrediënten, restaurant, maaltijd plannen
 - Joa → alles wat specifiek over de persoon Joa gaat
-- Persoonlijk → gezondheid, sport, dokter, tandarts, hobby, vrienden, familie, slaap, welzijn
-- Fotografie → foto's maken, camera instellen, foto bewerken, lenzen, Lightroom, shoot plannen
-- Financiën → rekening betalen, belasting regelen, budget bijhouden, bankafschrift, verzekering
+- Persoonlijk → gezondheid, sport, dokter, hobby, vrienden, familie, slaap, welzijn
+- Fotografie → foto's, camera, lens, bewerken, Lightroom, shoot plannen
+- Financiën → rekening, belasting, budget, bank, verzekering, uitgave
 
 Geef ALLEEN dit JSON terug, geen uitleg:
 {
@@ -571,7 +453,7 @@ Geef ALLEEN dit JSON terug, geen uitleg:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
+        'x-api-key': getApiKey(),
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
@@ -595,8 +477,7 @@ function mockAnalyze(text) {
 }
 
 async function aiSearch(query) {
-  const ANTHROPIC_KEY = getApiKey();
-  if (!ANTHROPIC_KEY) {
+  if (!getApiKey()) {
     return `(AI niet geconfigureerd) Zoekterm: "${query}"`;
   }
   const list = S.items.map(i =>
@@ -608,7 +489,7 @@ async function aiSearch(query) {
       method:'POST',
       headers: {
         'Content-Type':'application/json',
-        'x-api-key': ANTHROPIC_KEY,
+        'x-api-key': getApiKey(),
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
@@ -626,111 +507,48 @@ async function aiSearch(query) {
 // ════════════════════════════════════════════════════
 //  SPRAAK — INVOER
 // ════════════════════════════════════════════════════
-let rec = null, recActive = false, preMicText = '', recRestartTimer = null, silenceTimer = null;
+let rec = null, recActive = false;
 
-function startRec() {
+function initRec(onResult, onEnd) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  if (rec) { try { rec.abort(); } catch(e) {} }
-  rec = new SR();
-  rec.lang = 'nl-NL'; rec.continuous = false; rec.interimResults = true;
-
-  rec.onresult = e => {
-    const finals = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ');
-    const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
-    const current = [finals, interim].filter(Boolean).join(' ').trim();
-    const combined = [preMicText, current].filter(Boolean).join(' ');
-    const inp = document.getElementById('mainInput');
-    if (inp) { inp.value = combined; autoresize(inp); }
-    if (finals) {
-      preMicText = combined;
-      rec.stop();
-      clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => {
-        if (recActive) {
-          recActive = false;
-          clearTimeout(recRestartTimer);
-          if (rec) { try { rec.stop(); } catch(e) {} }
-        }
-      }, 2000);
-    }
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'nl-NL'; r.continuous = false; r.interimResults = true;
+  r.onresult = e => {
+    const t = Array.from(e.results).map(x => x[0].transcript).join('');
+    onResult(t);
   };
-
-  rec.onend = () => {
-    if (recActive) {
-      recRestartTimer = setTimeout(() => { if (recActive) startRec(); }, 1200);
-    } else {
-      stopRecUI();
-      const v = document.getElementById('mainInput')?.value.trim();
-      if (v) sendFromVoice();
-    }
-  };
-
-  rec.onerror = ev => {
-    if (ev.error === 'no-speech') {
-      if (recActive) recRestartTimer = setTimeout(() => { if (recActive) startRec(); }, 800);
-      return;
-    }
-    recActive = false; clearTimeout(recRestartTimer); clearTimeout(silenceTimer);
-    stopRecUI();
-    if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
-  };
-
-  try { rec.start(); } catch(e) {}
-}
-
-function stopRecUI() {
-  document.getElementById('micBtn').classList.remove('on');
-  document.getElementById('micBtn').textContent = '🎙️';
-  document.getElementById('recBanner').classList.remove('on');
+  r.onend = () => { recActive = false; onEnd(); };
+  r.onerror = ev => { recActive = false; onEnd(); if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error); };
+  return r;
 }
 
 function toggleMic() {
-  if (recActive) {
-    recActive = false; clearTimeout(recRestartTimer); clearTimeout(silenceTimer);
-    if (rec) { try { rec.stop(); } catch(e) {} }
-    return;
+  if (recActive) { rec && rec.stop(); return; }
+  if (!rec) {
+    rec = initRec(
+      t => { document.getElementById('mainInput').value = t; autoresize(document.getElementById('mainInput')); },
+      () => {
+        document.getElementById('micBtn').classList.remove('on');
+        document.getElementById('micBtn').textContent = '🎙️';
+        document.getElementById('recBanner').classList.remove('on');
+        const v = document.getElementById('mainInput').value.trim();
+        if (v) send();
+      }
+    );
   }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Spraak niet beschikbaar in deze browser'); return; }
-  preMicText = document.getElementById('mainInput').value.trim();
+  if (!rec) { toast('Spraak niet beschikbaar in deze browser'); return; }
+  document.getElementById('mainInput').value = '';
   recActive = true;
   document.getElementById('micBtn').classList.add('on');
   document.getElementById('micBtn').textContent = '⏹️';
   document.getElementById('recBanner').classList.add('on');
-  startRec();
+  rec.start();
 }
 
 // ════════════════════════════════════════════════════
 //  INVOER VERWERKEN
 // ════════════════════════════════════════════════════
-
-// Spraak → direct als concept naar Inbox, geen goedkeurpanel
-async function sendFromVoice() {
-  const el = document.getElementById('mainInput');
-  const txt = el.value.trim();
-  if (!txt) return;
-  el.value = ''; autoresize(el);
-  preMicText = '';
-  toast('🎙️ Verwerken…');
-  const sug = await aiAnalyze(txt);
-  const item = {
-    ID: uid(), Datum: today(), Type: sug.type || 'taak',
-    Inhoud: sug.samenvatting || txt,
-    Categorie: sug.categorie || cats[0],
-    Tijdsduur: sug.tijdsduur || '',
-    Prioriteit: sug.prioriteit || 'gemiddeld',
-    Status: 'open', Goedgekeurd: 'false',
-  };
-  const stored = JSON.parse(localStorage.getItem('eb_items') || '[]');
-  stored.unshift(item);
-  localStorage.setItem('eb_items', JSON.stringify(stored));
-  S.items.unshift(item);
-  toast('📥 Concept toegevoegd aan Inbox!');
-  updateBadge(); render();
-}
-
-// Typen → AI-panel tonen voor goedkeuring
 async function send() {
   const el = document.getElementById('mainInput');
   const txt = el.value.trim();
@@ -863,7 +681,7 @@ function renderAll() {
 }
 
 function renderDuration() {
-  const DURS = ['7,5 min','15 min','30 min','1 uur','meer dan 1 uur'];
+  const DURS = ['15 min','30 min','1 uur','meer dan 1 uur'];
   const all = approved();
   let html = `<div class="chips">
     ${DURS.map(d=>`<button class="chip ${S.durFilter===d?'on':''}" onclick="setDur('${d}')">${d}</button>`).join('')}
@@ -941,70 +759,23 @@ function renderSearch() {
     <div id="sRes"></div>`;
 }
 
-let srec = null, srecActive = false, srecRestartTimer = null, preSrecText = '', srecSilenceTimer = null;
-
-function startSearchRec() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  if (srec) { try { srec.abort(); } catch(e) {} }
-  srec = new SR();
-  srec.lang = 'nl-NL'; srec.continuous = false; srec.interimResults = true;
-
-  srec.onresult = e => {
-    const finals = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ');
-    const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
-    const t = [finals, interim].filter(Boolean).join(' ').trim();
-    if (document.getElementById('sIn')) document.getElementById('sIn').value = t;
-    if (finals) {
-      preSrecText = t; srec.stop();
-      clearTimeout(srecSilenceTimer);
-      srecSilenceTimer = setTimeout(() => {
-        if (srecActive) {
-          srecActive = false;
-          clearTimeout(srecRestartTimer);
-          if (srec) { try { srec.stop(); } catch(e) {} }
-        }
-      }, 2000);
-    }
-  };
-
-  srec.onend = () => {
-    if (srecActive) {
-      srecRestartTimer = setTimeout(() => { if (srecActive) startSearchRec(); }, 1200);
-    } else {
-      const mb = document.getElementById('sMic');
-      if (mb) { mb.textContent = '🎙️'; mb.style.background = 'var(--surface)'; }
-      const v = document.getElementById('sIn')?.value.trim();
-      if (v) doSearch();
-    }
-  };
-
-  srec.onerror = ev => {
-    if (ev.error === 'no-speech') {
-      if (srecActive) srecRestartTimer = setTimeout(() => { if (srecActive) startSearchRec(); }, 800);
-      return;
-    }
-    srecActive = false; clearTimeout(srecRestartTimer); clearTimeout(srecSilenceTimer);
-    const mb = document.getElementById('sMic');
-    if (mb) { mb.textContent = '🎙️'; mb.style.background = 'var(--surface)'; }
-    if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
-  };
-
-  try { srec.start(); } catch(e) {}
-}
-
+let srec = null;
 function toggleSearchMic() {
-  if (srecActive) {
-    srecActive = false; clearTimeout(srecRestartTimer); clearTimeout(srecSilenceTimer);
-    if (srec) { try { srec.stop(); } catch(e) {} }
-    return;
+  if (!srec) {
+    srec = initRec(
+      t => { if(document.getElementById('sIn')) document.getElementById('sIn').value = t; },
+      () => {
+        const mb = document.getElementById('sMic');
+        if(mb) { mb.textContent='🎙️'; mb.style.background='var(--surface)'; }
+        const v = document.getElementById('sIn')?.value.trim();
+        if(v) doSearch();
+      }
+    );
   }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Spraak niet beschikbaar'); return; }
+  if (!srec) { toast('Spraak niet beschikbaar'); return; }
   const mb = document.getElementById('sMic');
-  if (mb) { mb.textContent = '⏹️'; mb.style.background = 'var(--danger)'; }
-  preSrecText = ''; srecActive = true;
-  startSearchRec();
+  mb.textContent = '⏹️'; mb.style.background = 'var(--danger)';
+  srec.start();
 }
 
 async function doSearch() {
@@ -1041,7 +812,6 @@ function card(item, inboxMode=false) {
     <div class="item-actions">
       ${inboxMode ? `<button class="btn-xs bx-ok" onclick="quickApprove('${item.ID}')">✅ Goedkeuren</button>` : ''}
       ${item.Type==='taak' ? `<button class="btn-xs bx-done ${isDone?'done':''}" onclick="toggleDone('${item.ID}')">${isDone?'↩️ Heropenen':'✓ Klaar'}</button>` : ''}
-      <button class="btn-xs bx-edit" onclick="showItemEdit('${item.ID}')">✏️ Bewerken</button>
       <button class="btn-xs bx-del" onclick="delItem('${item.ID}')">🗑️</button>
     </div>
   </div>`;
@@ -1072,129 +842,6 @@ async function delItem(id) {
   await sheetDelete(id);
   S.items = S.items.filter(x=>x.ID!==id);
   toast('🗑️ Verwijderd'); updateBadge(); render();
-}
-
-// ════════════════════════════════════════════════════
-//  SPRAAK — BEWERKEN
-// ════════════════════════════════════════════════════
-let ierec = null, ierecActive = false, ierecRestartTimer = null, ierecSilenceTimer = null;
-
-function startIeRec() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  if (ierec) { try { ierec.abort(); } catch(e) {} }
-  ierec = new SR();
-  ierec.lang = 'nl-NL'; ierec.continuous = false; ierec.interimResults = true;
-  let preText = document.getElementById('ieContent')?.value || '';
-
-  ierec.onresult = e => {
-    const finals = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ');
-    const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
-    const current = [finals, interim].filter(Boolean).join(' ').trim();
-    const combined = [preText, current].filter(Boolean).join(' ');
-    const ta = document.getElementById('ieContent');
-    if (ta) ta.value = combined;
-    if (finals) {
-      preText = combined;
-      ierec.stop();
-      clearTimeout(ierecSilenceTimer);
-      ierecSilenceTimer = setTimeout(() => {
-        if (ierecActive) {
-          ierecActive = false;
-          clearTimeout(ierecRestartTimer);
-          if (ierec) { try { ierec.stop(); } catch(e) {} }
-          stopIeRecUI();
-        }
-      }, 2000);
-    }
-  };
-
-  ierec.onend = () => {
-    if (ierecActive) {
-      ierecRestartTimer = setTimeout(() => { if (ierecActive) startIeRec(); }, 1200);
-    } else {
-      stopIeRecUI();
-    }
-  };
-
-  ierec.onerror = ev => {
-    if (ev.error === 'no-speech') {
-      if (ierecActive) ierecRestartTimer = setTimeout(() => { if (ierecActive) startIeRec(); }, 800);
-      return;
-    }
-    ierecActive = false; clearTimeout(ierecRestartTimer); clearTimeout(ierecSilenceTimer);
-    stopIeRecUI();
-    if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
-  };
-
-  try { ierec.start(); } catch(e) {}
-}
-
-function stopIeRecUI() {
-  const btn = document.getElementById('ieMicBtn');
-  if (btn) { btn.classList.remove('on'); btn.textContent = '🎙️'; }
-}
-
-function toggleIeMic() {
-  if (ierecActive) {
-    ierecActive = false; clearTimeout(ierecRestartTimer); clearTimeout(ierecSilenceTimer);
-    if (ierec) { try { ierec.stop(); } catch(e) {} }
-    stopIeRecUI();
-    return;
-  }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Spraak niet beschikbaar in deze browser'); return; }
-  ierecActive = true;
-  const btn = document.getElementById('ieMicBtn');
-  if (btn) { btn.classList.add('on'); btn.textContent = '⏹️'; }
-  startIeRec();
-}
-
-// ════════════════════════════════════════════════════
-//  ITEM BEWERKEN
-// ════════════════════════════════════════════════════
-let ieId = null;
-
-function showItemEdit(id) {
-  const item = S.items.find(x => x.ID === id);
-  if (!item) return;
-  ieId = id;
-  document.getElementById('ieType').value = item.Type || 'taak';
-  document.getElementById('iePri').value  = item.Prioriteit || 'gemiddeld';
-  document.getElementById('ieDur').value  = item.Tijdsduur || '';
-  document.getElementById('ieContent').value = item.Inhoud || '';
-  const cs = document.getElementById('ieCat');
-  cs.innerHTML = cats.map(c =>
-    `<option value="${c}" ${c===item.Categorie?'selected':''}>${c}</option>`).join('');
-  document.getElementById('ieOverlay').classList.add('on');
-}
-
-function hideItemEdit() {
-  if (ierecActive) {
-    ierecActive = false; clearTimeout(ierecRestartTimer); clearTimeout(ierecSilenceTimer);
-    if (ierec) { try { ierec.stop(); } catch(e) {} }
-    stopIeRecUI();
-  }
-  ieId = null;
-  document.getElementById('ieOverlay').classList.remove('on');
-}
-
-async function saveItemEdit() {
-  if (!ieId) return;
-  const upd = {
-    Type:      document.getElementById('ieType').value,
-    Prioriteit:document.getElementById('iePri').value,
-    Categorie: document.getElementById('ieCat').value,
-    Tijdsduur: document.getElementById('ieDur').value,
-    Inhoud:    document.getElementById('ieContent').value.trim(),
-  };
-  if (!upd.Inhoud) { toast('Tekst mag niet leeg zijn'); return; }
-  const item = S.items.find(x => x.ID === ieId);
-  if (item) Object.assign(item, upd);
-  hideItemEdit();
-  toast('✅ Bijgewerkt!');
-  await sheetUpdate(ieId, upd);
-  render();
 }
 
 // ════════════════════════════════════════════════════
@@ -1252,7 +899,7 @@ async function refreshData() {
 //  INIT
 // ════════════════════════════════════════════════════
 async function init() {
-  if (!getApiKey()) showConfig();
+  if (!getApiKey()) configApiKey();
   document.getElementById('main').innerHTML =
     '<div class="loading"><span class="spin"></span> Laden…</div>';
   S.items = await sheetGet();
