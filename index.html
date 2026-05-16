@@ -497,19 +497,29 @@ function localDelete(id) { S.items = S.items.filter(x => x.ID !== id); localSave
 // ════════════════════════════════════════════════════
 async function aiAnalyze(text) {
   if (!getApiKey()) return mockAnalyze(text);
-  const prompt = `Je bent een slim assistent die taken en notities categoriseert.
+  const prompt = `Je bent een slim assistent die gesproken of getypte invoer verwerkt.
 
-Analyseer deze invoer: "${text}"
+Invoer: "${text}"
 
-Kies de meest passende categorie. Categorieën:
-- Computer & tech → ALLEEN voor: software, apps, code, pc, telefoon, printer, wifi, tech gadget
-- Huishouden → schoonmaken, boodschappen, was, opruimen, reparatie huis, tuin, meubels
-- Werk → vergadering, project, deadline, klant, collega, zakelijke e-mail, rapport
-- Koken & eten → recept, koken, ingrediënten, restaurant, maaltijd plannen
-- Joa → alles wat specifiek over de persoon Joa gaat
-- Persoonlijk → gezondheid, sport, dokter, hobby, vrienden, familie, slaap, welzijn
-- Fotografie → foto's, camera, lens, bewerken, Lightroom, shoot plannen
-- Financiën → rekening, belasting, budget, bank, verzekering, uitgave
+Stap 1 — Maak een nette samenvatting via het 5W+H schema:
+- Gebruik alleen de W's die aanwezig zijn: Wie, Wat, Waar, Wanneer, Waarom, Hoe
+- Bewaar alle belangrijke details: namen, plaatsen, apparaten, merken, specifieke dingen
+- Laat weg: "eh", "eigenlijk", "ik weet niet of", "misschien", aarzeling en opvulwoorden
+- Schrijf als één vloeiende Nederlandse zin of korte alinea (geen opsomming)
+
+Stap 2 — Bepaal op basis van de samenvatting:
+- type: actie = "taak", informatie = "notitie"
+- categorie (kies de best passende):
+  Computer & tech → ALLEEN: software, apps, code, pc, telefoon, printer, wifi, tech gadget
+  Huishouden → schoonmaken, boodschappen, was, opruimen, reparatie huis, tuin, meubels
+  Werk → vergadering, project, deadline, klant, collega, zakelijke e-mail, rapport
+  Koken & eten → recept, koken, ingrediënten, restaurant, maaltijd plannen
+  Joa → alles wat specifiek over de persoon Joa gaat
+  Persoonlijk → gezondheid, sport, dokter, hobby, vrienden, familie, slaap, welzijn
+  Fotografie → foto's, camera, lens, bewerken, Lightroom, shoot plannen
+  Financiën → rekening, belasting, budget, bank, verzekering, uitgave
+- prioriteit: hoog (urgent of belangrijk), gemiddeld, laag
+- tijdsduur: realistische schatting van de uitvoertijd
 
 Geef ALLEEN dit JSON terug, geen uitleg:
 {
@@ -517,7 +527,7 @@ Geef ALLEEN dit JSON terug, geen uitleg:
   "categorie": een van [${cats.join(', ')}],
   "tijdsduur": "7,5 min" | "15 min" | "30 min" | "1 uur" | "meer dan 1 uur" | "",
   "prioriteit": "hoog" | "gemiddeld" | "laag",
-  "samenvatting": beknopte herformulering van de invoer als actie of feit
+  "samenvatting": de nette 5W+H samenvatting als vloeiende zin
 }`;
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -581,22 +591,17 @@ async function aiSearch(query) {
 function makeRec(onInterim, onFinal) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return null;
-  let silenceTimer = null;
   const r = new SR();
-  r.lang = 'nl-NL'; r.continuous = true; r.interimResults = true;
+  r.lang = 'nl-NL'; r.continuous = false; r.interimResults = true;
 
   r.onresult = e => {
     const finals  = Array.from(e.results).filter(x => x.isFinal).map(x => x[0].transcript).join(' ');
     const interim = Array.from(e.results).filter(x => !x.isFinal).map(x => x[0].transcript).join(' ');
     onInterim([finals, interim].filter(Boolean).join(' ').trim());
-    if (finals) {
-      clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => { try { r.stop(); } catch(e) {} }, 2000);
-    }
+    if (finals) { try { r.stop(); } catch(e) {} }
   };
-  r.onend = () => { clearTimeout(silenceTimer); onFinal(); };
+  r.onend   = () => { onFinal(); };
   r.onerror = ev => {
-    clearTimeout(silenceTimer);
     if (ev.error !== 'no-speech' && ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
     onFinal();
   };
