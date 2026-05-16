@@ -171,10 +171,11 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
   padding: 6px 11px; border-radius: var(--rs); border: none;
   font-size: .78rem; cursor: pointer; font-weight: 600; transition: opacity .15s;
 }
-.bx-ok  { background: var(--success); color: #fff; }
+.bx-ok   { background: var(--success); color: #fff; }
 .bx-done { background: transparent; border: 1px solid var(--muted); color: var(--muted); }
 .bx-done.done { background: var(--success); border-color: var(--success); color: #fff; }
-.bx-del { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+.bx-del  { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+.bx-edit { background: transparent; border: 1px solid var(--accent-light); color: var(--accent-light); }
 
 /* ── CONFIG OVERLAY ── */
 .cfg-overlay {
@@ -293,6 +294,52 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
   </div>
 </div>
 
+<!-- Item bewerken overlay -->
+<div class="cfg-overlay" id="ieOverlay">
+  <div class="cfg-box">
+    <div class="cfg-title">✏️ Item bewerken</div>
+    <div class="frow">
+      <div class="fg">
+        <span class="flabel">Type</span>
+        <select id="ieType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option></select>
+      </div>
+      <div class="fg">
+        <span class="flabel">Prioriteit</span>
+        <select id="iePri">
+          <option value="hoog">🔴 Hoog</option>
+          <option value="gemiddeld">🟡 Gemiddeld</option>
+          <option value="laag">🟢 Laag</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <span class="flabel">Categorie</span>
+        <select id="ieCat"></select>
+      </div>
+      <div class="fg">
+        <span class="flabel">Tijdsduur</span>
+        <select id="ieDur">
+          <option value="">— onbekend</option>
+          <option value="7,5 min">7,5 min</option>
+          <option value="15 min">15 min</option>
+          <option value="30 min">30 min</option>
+          <option value="1 uur">1 uur</option>
+          <option value="meer dan 1 uur">Meer dan 1 uur</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:14px">
+      <span class="flabel">Tekst</span>
+      <textarea class="finput" id="ieContent" rows="2"></textarea>
+    </div>
+    <div class="cfg-btns">
+      <button class="cfg-save" onclick="saveItemEdit()">✅ Opslaan</button>
+      <button class="cfg-skip" onclick="hideItemEdit()">Annuleren</button>
+    </div>
+  </div>
+</div>
+
 <div class="hdr">
   <div class="hdr-top">
     <h1>🧠 Extern Brein</h1>
@@ -344,6 +391,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
           <span class="flabel">Tijdsduur</span>
           <select id="eDur">
             <option value="">— onbekend</option>
+            <option value="7,5 min">7,5 min</option>
             <option value="15 min">15 min</option>
             <option value="30 min">30 min</option>
             <option value="1 uur">1 uur</option>
@@ -494,7 +542,7 @@ Geef ALLEEN een geldig JSON-object, geen uitleg:
 {
   "type": "taak" of "notitie",
   "categorie": een van [${cats.join(', ')}],
-  "tijdsduur": "15 min" | "30 min" | "1 uur" | "meer dan 1 uur" | "",
+  "tijdsduur": "7,5 min" | "15 min" | "30 min" | "1 uur" | "meer dan 1 uur" | "",
   "prioriteit": "hoog" | "gemiddeld" | "laag",
   "samenvatting": kort en helder geformuleerde versie van de invoer (max 120 tekens)
 }`;
@@ -558,48 +606,104 @@ async function aiSearch(query) {
 // ════════════════════════════════════════════════════
 //  SPRAAK — INVOER
 // ════════════════════════════════════════════════════
-let rec = null, recActive = false;
+let rec = null, recActive = false, preMicText = '', recRestartTimer = null;
 
-function initRec(onResult, onEnd) {
+function startRec() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return null;
-  const r = new SR();
-  r.lang = 'nl-NL'; r.continuous = true; r.interimResults = true;
-  r.onresult = e => {
-    const t = Array.from(e.results).map(x => x[0].transcript).join('');
-    onResult(t);
+  if (!SR) return;
+  if (rec) { try { rec.abort(); } catch(e) {} }
+  rec = new SR();
+  rec.lang = 'nl-NL'; rec.continuous = false; rec.interimResults = true;
+
+  rec.onresult = e => {
+    const finals = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ');
+    const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
+    const current = [finals, interim].filter(Boolean).join(' ').trim();
+    const combined = [preMicText, current].filter(Boolean).join(' ');
+    const inp = document.getElementById('mainInput');
+    if (inp) { inp.value = combined; autoresize(inp); }
+    if (finals) {
+      preMicText = combined;
+      rec.stop();
+    }
   };
-  r.onend = () => { recActive = false; onEnd(); };
-  r.onerror = ev => { recActive = false; onEnd(); if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error); };
-  return r;
+
+  rec.onend = () => {
+    if (recActive) {
+      // Korte pauze zodat echo niet wordt opgepikt, dan herstarten
+      recRestartTimer = setTimeout(() => { if (recActive) startRec(); }, 1200);
+    } else {
+      stopRecUI();
+      const v = document.getElementById('mainInput')?.value.trim();
+      if (v) sendFromVoice();
+    }
+  };
+
+  rec.onerror = ev => {
+    if (ev.error === 'no-speech') {
+      if (recActive) recRestartTimer = setTimeout(() => { if (recActive) startRec(); }, 800);
+      return;
+    }
+    recActive = false; clearTimeout(recRestartTimer);
+    stopRecUI();
+    if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
+  };
+
+  try { rec.start(); } catch(e) {}
+}
+
+function stopRecUI() {
+  document.getElementById('micBtn').classList.remove('on');
+  document.getElementById('micBtn').textContent = '🎙️';
+  document.getElementById('recBanner').classList.remove('on');
 }
 
 function toggleMic() {
-  if (recActive) { rec && rec.stop(); return; }
-  if (!rec) {
-    rec = initRec(
-      t => { document.getElementById('mainInput').value = t; autoresize(document.getElementById('mainInput')); },
-      () => {
-        document.getElementById('micBtn').classList.remove('on');
-        document.getElementById('micBtn').textContent = '🎙️';
-        document.getElementById('recBanner').classList.remove('on');
-        const v = document.getElementById('mainInput').value.trim();
-        if (v) send();
-      }
-    );
+  if (recActive) {
+    recActive = false; clearTimeout(recRestartTimer);
+    if (rec) { try { rec.stop(); } catch(e) {} }
+    return;
   }
-  if (!rec) { toast('Spraak niet beschikbaar in deze browser'); return; }
-  document.getElementById('mainInput').value = '';
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('Spraak niet beschikbaar in deze browser'); return; }
+  preMicText = document.getElementById('mainInput').value.trim();
   recActive = true;
   document.getElementById('micBtn').classList.add('on');
   document.getElementById('micBtn').textContent = '⏹️';
   document.getElementById('recBanner').classList.add('on');
-  rec.start();
+  startRec();
 }
 
 // ════════════════════════════════════════════════════
 //  INVOER VERWERKEN
 // ════════════════════════════════════════════════════
+
+// Spraak → direct als concept naar Inbox, geen goedkeurpanel
+async function sendFromVoice() {
+  const el = document.getElementById('mainInput');
+  const txt = el.value.trim();
+  if (!txt) return;
+  el.value = ''; autoresize(el);
+  preMicText = '';
+  toast('🎙️ Verwerken…');
+  const sug = await aiAnalyze(txt);
+  const item = {
+    ID: uid(), Datum: today(), Type: sug.type || 'taak',
+    Inhoud: sug.samenvatting || txt,
+    Categorie: sug.categorie || cats[0],
+    Tijdsduur: sug.tijdsduur || '',
+    Prioriteit: sug.prioriteit || 'gemiddeld',
+    Status: 'open', Goedgekeurd: 'false',
+  };
+  const stored = JSON.parse(localStorage.getItem('eb_items') || '[]');
+  stored.unshift(item);
+  localStorage.setItem('eb_items', JSON.stringify(stored));
+  S.items.unshift(item);
+  toast('📥 Concept toegevoegd aan Inbox!');
+  updateBadge(); render();
+}
+
+// Typen → AI-panel tonen voor goedkeuring
 async function send() {
   const el = document.getElementById('mainInput');
   const txt = el.value.trim();
@@ -732,7 +836,7 @@ function renderAll() {
 }
 
 function renderDuration() {
-  const DURS = ['15 min','30 min','1 uur','meer dan 1 uur'];
+  const DURS = ['7,5 min','15 min','30 min','1 uur','meer dan 1 uur'];
   const all = approved();
   let html = `<div class="chips">
     ${DURS.map(d=>`<button class="chip ${S.durFilter===d?'on':''}" onclick="setDur('${d}')">${d}</button>`).join('')}
@@ -810,23 +914,60 @@ function renderSearch() {
     <div id="sRes"></div>`;
 }
 
-let srec = null;
+let srec = null, srecActive = false, srecRestartTimer = null, preSrecText = '';
+
+function startSearchRec() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (srec) { try { srec.abort(); } catch(e) {} }
+  srec = new SR();
+  srec.lang = 'nl-NL'; srec.continuous = false; srec.interimResults = true;
+
+  srec.onresult = e => {
+    const finals = Array.from(e.results).filter(r => r.isFinal).map(r => r[0].transcript).join(' ');
+    const interim = Array.from(e.results).filter(r => !r.isFinal).map(r => r[0].transcript).join(' ');
+    const t = [finals, interim].filter(Boolean).join(' ').trim();
+    if (document.getElementById('sIn')) document.getElementById('sIn').value = t;
+    if (finals) { preSrecText = t; srec.stop(); }
+  };
+
+  srec.onend = () => {
+    if (srecActive) {
+      srecRestartTimer = setTimeout(() => { if (srecActive) startSearchRec(); }, 1200);
+    } else {
+      const mb = document.getElementById('sMic');
+      if (mb) { mb.textContent = '🎙️'; mb.style.background = 'var(--surface)'; }
+      const v = document.getElementById('sIn')?.value.trim();
+      if (v) doSearch();
+    }
+  };
+
+  srec.onerror = ev => {
+    if (ev.error === 'no-speech') {
+      if (srecActive) srecRestartTimer = setTimeout(() => { if (srecActive) startSearchRec(); }, 800);
+      return;
+    }
+    srecActive = false; clearTimeout(srecRestartTimer);
+    const mb = document.getElementById('sMic');
+    if (mb) { mb.textContent = '🎙️'; mb.style.background = 'var(--surface)'; }
+    if (ev.error !== 'aborted') toast('Mic fout: ' + ev.error);
+  };
+
+  try { srec.start(); } catch(e) {}
+}
+
 function toggleSearchMic() {
-  if (!srec) {
-    srec = initRec(
-      t => { if(document.getElementById('sIn')) document.getElementById('sIn').value = t; },
-      () => {
-        const mb = document.getElementById('sMic');
-        if(mb) { mb.textContent='🎙️'; mb.style.background='var(--surface)'; }
-        const v = document.getElementById('sIn')?.value.trim();
-        if(v) doSearch();
-      }
-    );
+  if (srecActive) {
+    srecActive = false; clearTimeout(srecRestartTimer);
+    if (srec) { try { srec.stop(); } catch(e) {} }
+    return;
   }
-  if (!srec) { toast('Spraak niet beschikbaar'); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('Spraak niet beschikbaar'); return; }
   const mb = document.getElementById('sMic');
-  mb.textContent = '⏹️'; mb.style.background = 'var(--danger)';
-  srec.start();
+  if (mb) { mb.textContent = '⏹️'; mb.style.background = 'var(--danger)'; }
+  preSrecText = ''; srecActive = true;
+  startSearchRec();
 }
 
 async function doSearch() {
@@ -863,6 +1004,7 @@ function card(item, inboxMode=false) {
     <div class="item-actions">
       ${inboxMode ? `<button class="btn-xs bx-ok" onclick="quickApprove('${item.ID}')">✅ Goedkeuren</button>` : ''}
       ${item.Type==='taak' ? `<button class="btn-xs bx-done ${isDone?'done':''}" onclick="toggleDone('${item.ID}')">${isDone?'↩️ Heropenen':'✓ Klaar'}</button>` : ''}
+      <button class="btn-xs bx-edit" onclick="showItemEdit('${item.ID}')">✏️ Bewerken</button>
       <button class="btn-xs bx-del" onclick="delItem('${item.ID}')">🗑️</button>
     </div>
   </div>`;
@@ -893,6 +1035,48 @@ async function delItem(id) {
   await sheetDelete(id);
   S.items = S.items.filter(x=>x.ID!==id);
   toast('🗑️ Verwijderd'); updateBadge(); render();
+}
+
+// ════════════════════════════════════════════════════
+//  ITEM BEWERKEN
+// ════════════════════════════════════════════════════
+let ieId = null;
+
+function showItemEdit(id) {
+  const item = S.items.find(x => x.ID === id);
+  if (!item) return;
+  ieId = id;
+  document.getElementById('ieType').value = item.Type || 'taak';
+  document.getElementById('iePri').value  = item.Prioriteit || 'gemiddeld';
+  document.getElementById('ieDur').value  = item.Tijdsduur || '';
+  document.getElementById('ieContent').value = item.Inhoud || '';
+  const cs = document.getElementById('ieCat');
+  cs.innerHTML = cats.map(c =>
+    `<option value="${c}" ${c===item.Categorie?'selected':''}>${c}</option>`).join('');
+  document.getElementById('ieOverlay').classList.add('on');
+}
+
+function hideItemEdit() {
+  ieId = null;
+  document.getElementById('ieOverlay').classList.remove('on');
+}
+
+async function saveItemEdit() {
+  if (!ieId) return;
+  const upd = {
+    Type:      document.getElementById('ieType').value,
+    Prioriteit:document.getElementById('iePri').value,
+    Categorie: document.getElementById('ieCat').value,
+    Tijdsduur: document.getElementById('ieDur').value,
+    Inhoud:    document.getElementById('ieContent').value.trim(),
+  };
+  if (!upd.Inhoud) { toast('Tekst mag niet leeg zijn'); return; }
+  const item = S.items.find(x => x.ID === ieId);
+  if (item) Object.assign(item, upd);
+  hideItemEdit();
+  toast('✅ Bijgewerkt!');
+  await sheetUpdate(ieId, upd);
+  render();
 }
 
 // ════════════════════════════════════════════════════
