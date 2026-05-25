@@ -279,7 +279,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
     <div class="frow">
       <div class="fg">
         <span class="flabel">Type</span>
-        <select id="ieType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option></select>
+        <select id="ieType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option><option value="TTR">🔁 TTR</option><option value="TTD">📋 TTD</option></select>
       </div>
       <div class="fg">
         <span class="flabel">Prioriteit</span>
@@ -333,6 +333,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
     <button class="tab"        id="tab-duration" onclick="go('duration')">⏱️ Duur</button>
     <button class="tab"        id="tab-category" onclick="go('category')">🗂️ Categorie</button>
     <button class="tab"        id="tab-priority" onclick="go('priority')">🎯 Prioriteit</button>
+    <button class="tab"        id="tab-type"     onclick="go('type')">🏷️ Type</button>
     <button class="tab"        id="tab-search"   onclick="go('search')">🔍 Zoeken</button>
   </div>
 </div>
@@ -350,7 +351,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
       <div class="frow">
         <div class="fg">
           <span class="flabel">Type</span>
-          <select id="eType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option></select>
+          <select id="eType"><option value="taak">✓ Taak</option><option value="notitie">📝 Notitie</option><option value="TTR">🔁 TTR</option><option value="TTD">📋 TTD</option></select>
         </div>
         <div class="fg">
           <span class="flabel">Prioriteit</span>
@@ -432,6 +433,7 @@ const S = {
   editOpen: false,
   durFilter: null,
   catFilter: null,
+  typeFilter: null,
 };
 
 // ════════════════════════════════════════════════════
@@ -739,7 +741,7 @@ function showSuggestion(orig, sug) {
 
   const pc = { hoog:'t-hi', gemiddeld:'t-mid', laag:'t-lo' };
   document.getElementById('aiTags').innerHTML =
-    `<span class="tag t-type">${S.pending.Type === 'taak' ? '✓ Taak' : '📝 Notitie'}</span>
+    `<span class="tag t-type">${{taak:'✓ Taak',notitie:'📝 Notitie',TTR:'🔁 TTR',TTD:'📋 TTD'}[S.pending.Type]||S.pending.Type}</span>
      <span class="tag t-cat">${S.pending.Categorie}</span>
      ${S.pending.Tijdsduur ? `<span class="tag t-dur">⏱️ ${S.pending.Tijdsduur}</span>` : ''}
      <span class="tag ${pc[S.pending.Prioriteit]||'t-mid'}">${priLabel(S.pending.Prioriteit)}</span>`;
@@ -793,7 +795,7 @@ function closePanel() {
 //  NAVIGATIE
 // ════════════════════════════════════════════════════
 function go(v) {
-  S.view = v; S.durFilter = null; S.catFilter = null;
+  S.view = v; S.durFilter = null; S.catFilter = null; S.typeFilter = null;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + v)?.classList.add('active');
   render();
@@ -807,6 +809,7 @@ function render() {
     case 'duration': renderDuration(); break;
     case 'category': renderCategory(); break;
     case 'priority': renderPriority(); break;
+    case 'type':     renderType();     break;
     case 'search':   renderSearch();   break;
   }
 }
@@ -898,6 +901,42 @@ function renderPriority() {
   document.getElementById('main').innerHTML = html || empty('🎯','Geen items');
 }
 
+function renderType() {
+  const TYPES = [
+    {k:'taak',    l:'☑️ Taak'},
+    {k:'notitie', l:'📝 Notitie'},
+    {k:'TTR',     l:'🔁 TTR'},
+    {k:'TTD',     l:'📋 TTD'},
+  ];
+  let html = `<div class="chips">
+    ${TYPES.map(t=>`<button class="chip ${S.typeFilter===t.k?'on':''}" onclick="setTypeFilter('${t.k}')">${t.l}</button>`).join('')}
+  </div>`;
+  if (S.typeFilter !== null) {
+    html += `<div class="search-row" style="margin-bottom:12px">
+      <input id="typeSearchIn" class="search-in" placeholder="Zoek binnen ${S.typeFilter}…"
+        oninput="filterTypeResults(this.value)">
+    </div>
+    <div id="typeResults"></div>`;
+  }
+  document.getElementById('main').innerHTML = html;
+  if (S.typeFilter !== null) filterTypeResults('');
+}
+
+function filterTypeResults(q) {
+  const res = document.getElementById('typeResults');
+  if (!res) return;
+  let items = approved().filter(i => (i.Type||'').toLowerCase() === S.typeFilter.toLowerCase());
+  if (q.trim()) {
+    const lq = q.toLowerCase();
+    items = items.filter(i => (i.Inhoud||'').toLowerCase().includes(lq));
+  }
+  res.innerHTML = items.length
+    ? items.map(i=>card(i)).join('')
+    : empty('🏷️', q.trim() ? 'Geen items gevonden' : 'Geen items van dit type');
+}
+
+function setTypeFilter(t) { S.typeFilter = t; renderType(); }
+
 function renderSearch() {
   document.getElementById('main').innerHTML = `
     <div class="search-row">
@@ -952,7 +991,7 @@ function card(item, inboxMode=false) {
   const isDone = item.Status === 'gedaan';
   const pc = isApproved ? `p-${item.Prioriteit}` : 'inbox-item';
   const doneClass = isDone ? 'done-item' : '';
-  const typeIcon = item.Type === 'taak' ? '☑️' : '📝';
+  const typeIcon = item.Type === 'taak' ? '☑️' : item.Type === 'notitie' ? '📝' : item.Type === 'TTR' ? '🔁' : item.Type === 'TTD' ? '📋' : '📌';
 
   return `<div class="item ${pc} ${doneClass}" id="c${item.ID}">
     <div class="item-head">
