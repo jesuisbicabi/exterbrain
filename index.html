@@ -436,6 +436,9 @@ const S = {
   typeFilter: null,
 };
 
+// IDs van lokaal gewijzigde items die nog niet bevestigd zijn in Sheets
+let locallyModified = new Set();
+
 // ════════════════════════════════════════════════════
 //  GOOGLE SHEETS PROXY
 // ════════════════════════════════════════════════════
@@ -452,35 +455,50 @@ async function sheetGet() {
 
 async function sheetAdd(item) {
   if (!sheetsReady()) { localAdd(item); return item; }
+  locallyModified.add(item.ID);
+  savePending();
+  localSave();
   try {
     await fetch(SHEETS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({action:'add', item})
     });
+    locallyModified.delete(item.ID);
+    savePending();
     return item;
   } catch { toast('⚠️ Opslaan mislukt'); return null; }
 }
 
 async function sheetUpdate(id, upd) {
   if (!sheetsReady()) { localUpdate(id, upd); return; }
+  locallyModified.add(id);
+  savePending();
+  localSave();
   try {
     await fetch(SHEETS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({action:'update', id, updates: upd})
     });
+    locallyModified.delete(id);
+    savePending();
   } catch { toast('⚠️ Update mislukt'); }
 }
 
 async function sheetDelete(id) {
   if (!sheetsReady()) { localDelete(id); return; }
+  locallyModified.add(id);
+  savePending();
+  localSave();
   try {
     await fetch(SHEETS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({action:'delete', id})
     });
+    locallyModified.delete(id);
+    savePending();
   } catch { toast('⚠️ Verwijderen mislukt'); }
 }
 
@@ -489,6 +507,8 @@ function localGet() {
   return JSON.parse(localStorage.getItem('eb_items') || '[]');
 }
 function localSave() { localStorage.setItem('eb_items', JSON.stringify(S.items)); }
+function savePending() { localStorage.setItem('eb_pending', JSON.stringify([...locallyModified])); }
+function loadPending() { locallyModified = new Set(JSON.parse(localStorage.getItem('eb_pending') || '[]')); }
 function localAdd(item) { S.items.unshift(item); localSave(); render(); }
 function localUpdate(id, upd) {
   const i = S.items.find(x => x.ID === id);
@@ -496,6 +516,47 @@ function localUpdate(id, upd) {
   localSave(); render();
 }
 function localDelete(id) { S.items = S.items.filter(x => x.ID !== id); localSave(); render(); }
+
+// Merge Sheets-data met lokale state: lokaal gewijzigde items hebben voorrang
+function mergeItems(sheetsItems) {
+  const currentMap = new Map(S.items.map(x => [x.ID, x]));
+  const sheetsMap  = new Map(sheetsItems.map(x => [x.ID, x]));
+  const merged = [];
+
+  for (const [id, sheetItem] of sheetsMap) {
+    if (locallyModified.has(id) && currentMap.has(id)) {
+      merged.push(currentMap.get(id)); // lokale versie wint
+    } else {
+      merged.push(sheetItem);
+    }
+  }
+
+  // Lokaal toegevoegde items die nog niet in Sheets staan
+  for (const [id, localItem] of currentMap) {
+    if (!sheetsMap.has(id) && locallyModified.has(id)) {
+      merged.unshift(localItem);
+    }
+  }
+
+  return merged;
+}
+
+// Achtergrond-poll: haalt Sheets op en mergt stille wijzigingen
+async function pollSheets() {
+  if (!sheetsReady()) return;
+  try {
+    const sheetsItems = await sheetGet();
+    const merged = mergeItems(sheetsItems);
+    const before = S.items.map(x => x.ID + x.Status + x.Inhoud + x.Goedgekeurd).join();
+    const after  = merged.map(x => x.ID + x.Status + x.Inhoud + x.Goedgekeurd).join();
+    if (before !== after) {
+      S.items = merged;
+      localSave();
+      updateBadge();
+      render();
+    }
+  } catch {} // stille mislukking voor achtergrond-sync
+}
 
 // ════════════════════════════════════════════════════
 //  ANTHROPIC AI
@@ -1135,7 +1196,9 @@ function updateBadge() {
 
 async function refreshData() {
   toast('↻ Ophalen…');
-  S.items = await sheetGet();
+  const sheetsItems = await sheetGet();
+  S.items = mergeItems(sheetsItems);
+  localSave();
   updateBadge(); render(); toast('✓ Bijgewerkt!');
 }
 
@@ -1143,12 +1206,34 @@ async function refreshData() {
 //  INIT
 // ════════════════════════════════════════════════════
 async function init() {
+  loadPending();
   if (!getApiKey()) configApiKey();
   document.getElementById('main').innerHTML =
     '<div class="loading"><span class="spin"></span> Laden…</div>';
-  S.items = await sheetGet();
+
+  const sheetsItems = await sheetGet();
+
+  if (locallyModified.size > 0) {
+    // Herstel lokale pending items uit localStorage en merge met Sheets
+    S.items = localGet();
+    S.items = mergeItems(sheetsItems);
+  } else {
+    S.items = sheetsItems;
+  }
+
+  localSave();
+  locallyModified.clear();
+  savePending();
   updateBadge();
   render();
+
+  // Poll elke 60 seconden voor wijzigingen in Sheets
+  setInterval(pollSheets, 60000);
+
+  // Sync zodra gebruiker terugkeert naar dit tabblad
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) pollSheets();
+  });
 }
 
 init();
