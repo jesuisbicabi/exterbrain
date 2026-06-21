@@ -101,6 +101,7 @@ body {
 .t-hi   { background:#3a1e1e; color:#f87171; }
 .t-mid  { background:#3a2f1e; color:#fb923c; }
 .t-lo   { background:#1e3a2f; color:#34d399; }
+.t-fu   { background:#1e2a3a; color:#60a5fa; }
 
 /* edit form inside panel */
 .edit-form { display: none; margin-bottom: 10px; }
@@ -134,7 +135,8 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .main-input {
   flex: 1; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); padding: 11px 14px; color: var(--text);
-  font-size: 1rem; resize: none; min-height: 46px;
+  font-size: 1rem; resize: none; min-height: 130px; max-height: 50vh;
+  overflow-y: auto; line-height: 1.45;
   outline: none; transition: border-color .18s; font-family: inherit;
 }
 .main-input:focus { border-color: var(--accent); }
@@ -155,6 +157,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
 .item.p-hoog    { border-left-color: var(--danger); }
 .item.p-gemiddeld { border-left-color: var(--warning); }
 .item.p-laag    { border-left-color: var(--success); }
+.item.p-opvolgen { border-left-color: #60a5fa; }
 .item.inbox-item { border-left-color: var(--accent); }
 .item.done-item { opacity: .55; }
 
@@ -287,6 +290,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
           <option value="hoog">🔴 Hoog</option>
           <option value="gemiddeld">🟡 Gemiddeld</option>
           <option value="laag">🟢 Laag</option>
+          <option value="opvolgen">🔵 Opvolgen</option>
         </select>
       </div>
     </div>
@@ -359,6 +363,7 @@ textarea.finput { resize: vertical; min-height: 56px; font-family: inherit; }
             <option value="hoog">🔴 Hoog</option>
             <option value="gemiddeld">🟡 Gemiddeld</option>
             <option value="laag">🟢 Laag</option>
+            <option value="opvolgen">🔵 Opvolgen</option>
           </select>
         </div>
       </div>
@@ -464,8 +469,7 @@ async function sheetAdd(item) {
       mode: 'no-cors',
       body: JSON.stringify({action:'add', item})
     });
-    locallyModified.delete(item.ID);
-    savePending();
+    // Bescherming blijft staan tot een poll bevestigt dat de Sheet 'm heeft
     return item;
   } catch { toast('⚠️ Opslaan mislukt'); return null; }
 }
@@ -481,8 +485,7 @@ async function sheetUpdate(id, upd) {
       mode: 'no-cors',
       body: JSON.stringify({action:'update', id, updates: upd})
     });
-    locallyModified.delete(id);
-    savePending();
+    // Bescherming blijft staan tot een poll bevestigt dat de Sheet 'm heeft
   } catch { toast('⚠️ Update mislukt'); }
 }
 
@@ -497,8 +500,7 @@ async function sheetDelete(id) {
       mode: 'no-cors',
       body: JSON.stringify({action:'delete', id})
     });
-    locallyModified.delete(id);
-    savePending();
+    // Bescherming blijft staan tot een poll bevestigt dat de Sheet 'm verwijderd heeft
   } catch { toast('⚠️ Verwijderen mislukt'); }
 }
 
@@ -524,8 +526,9 @@ function mergeItems(sheetsItems) {
   const merged = [];
 
   for (const [id, sheetItem] of sheetsMap) {
-    if (locallyModified.has(id) && currentMap.has(id)) {
-      merged.push(currentMap.get(id)); // lokale versie wint
+    if (locallyModified.has(id)) {
+      if (currentMap.has(id)) merged.push(currentMap.get(id)); // lokale toevoeging/wijziging wint
+      // anders: lokaal verwijderd maar nog niet bevestigd → niet terugzetten uit Sheets
     } else {
       merged.push(sheetItem);
     }
@@ -541,14 +544,44 @@ function mergeItems(sheetsItems) {
   return merged;
 }
 
+// Normaliseer een waarde voor vergelijking (boolean/undefined → string)
+function norm(v) { return (v === undefined || v === null) ? '' : String(v); }
+
+// Vergelijkbare handtekening van een item over alle relevante velden
+function itemSig(x) {
+  return [x.ID, x.Type, x.Inhoud, x.Categorie, x.Tijdsduur, x.Prioriteit, x.Status, x.Goedgekeurd]
+    .map(norm).join('|');
+}
+
+// Bevestigt de Sheet de lokale wijziging van dit item?
+function sheetConfirms(id, sheetsMap) {
+  const local = S.items.find(x => x.ID === id);
+  if (!local) return !sheetsMap.has(id);          // lokaal verwijderd → bevestigd als weg uit Sheets
+  const s = sheetsMap.get(id);
+  if (!s) return false;                            // lokaal toegevoegd → nog niet in Sheets
+  const fields = ['Type','Inhoud','Categorie','Tijdsduur','Prioriteit','Status','Goedgekeurd'];
+  return fields.every(f => norm(s[f]) === norm(local[f]));
+}
+
+// Hef bescherming op voor items waarvan de Sheet de wijziging inmiddels bevat
+function clearConfirmedPending(sheetsMap) {
+  let changed = false;
+  for (const id of [...locallyModified]) {
+    if (sheetConfirms(id, sheetsMap)) { locallyModified.delete(id); changed = true; }
+  }
+  if (changed) savePending();
+}
+
 // Achtergrond-poll: haalt Sheets op en mergt stille wijzigingen
 async function pollSheets() {
   if (!sheetsReady()) return;
   try {
     const sheetsItems = await sheetGet();
+    const sheetsMap = new Map(sheetsItems.map(x => [x.ID, x]));
+    clearConfirmedPending(sheetsMap);              // bescherming opheffen zodra Sheet bevestigt
     const merged = mergeItems(sheetsItems);
-    const before = S.items.map(x => x.ID + x.Status + x.Inhoud + x.Goedgekeurd).join();
-    const after  = merged.map(x => x.ID + x.Status + x.Inhoud + x.Goedgekeurd).join();
+    const before = S.items.map(itemSig).join();
+    const after  = merged.map(itemSig).join();
     if (before !== after) {
       S.items = merged;
       localSave();
@@ -584,7 +617,7 @@ Stap 2 — Bepaal op basis van de samenvatting:
   Persoonlijk → gezondheid, sport, dokter, hobby, vrienden, familie, slaap, welzijn
   Fotografie → foto's, camera, lens, bewerken, Lightroom, shoot plannen
   Financiën → rekening, belasting, budget, bank, verzekering, uitgave
-- prioriteit: hoog (urgent of belangrijk), gemiddeld, laag
+- prioriteit: hoog (urgent of belangrijk), gemiddeld, laag, opvolgen (iets om later op te volgen / in de gaten te houden)
 - tijdsduur: realistische schatting van de uitvoertijd
 
 Geef ALLEEN dit JSON terug, geen uitleg:
@@ -592,7 +625,7 @@ Geef ALLEEN dit JSON terug, geen uitleg:
   "type": "taak" of "notitie",
   "categorie": een van [${cats.join(', ')}],
   "tijdsduur": "7,5 min" | "15 min" | "30 min" | "1 uur" | "meer dan 1 uur" | "",
-  "prioriteit": "hoog" | "gemiddeld" | "laag",
+  "prioriteit": "hoog" | "gemiddeld" | "laag" | "opvolgen",
   "samenvatting": de nette 5W+H samenvatting als vloeiende zin
 }`;
   try {
@@ -803,7 +836,7 @@ function showSuggestion(orig, sug) {
 
   document.getElementById('aiText').textContent = S.pending.Inhoud;
 
-  const pc = { hoog:'t-hi', gemiddeld:'t-mid', laag:'t-lo' };
+  const pc = { hoog:'t-hi', gemiddeld:'t-mid', laag:'t-lo', opvolgen:'t-fu' };
   document.getElementById('aiTags').innerHTML =
     `<span class="tag t-type">${{taak:'✓ Taak',notitie:'📝 Notitie',TTR:'🔁 TTR',TTD:'📋 TTD'}[S.pending.Type]||S.pending.Type}</span>
      <span class="tag t-cat">${S.pending.Categorie}</span>
@@ -952,6 +985,7 @@ function renderPriority() {
     {k:'hoog',    l:'🔴 Hoog',      col:'var(--danger)'},
     {k:'gemiddeld',l:'🟡 Gemiddeld', col:'var(--warning)'},
     {k:'laag',    l:'🟢 Laag',      col:'var(--success)'},
+    {k:'opvolgen',l:'🔵 Opvolgen',  col:'#60a5fa'},
   ];
   let html = '';
   pris.forEach(({k,l,col}) => {
@@ -1156,7 +1190,7 @@ function approved()  { return S.items.filter(i => i.Goedgekeurd==='true' || i.Go
 function uid()       { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function today()     { return new Date().toISOString().split('T')[0]; }
 function esc(s)      { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function priLabel(p) { return p==='hoog'?'🔴 Hoog':p==='gemiddeld'?'🟡 Gemiddeld':'🟢 Laag'; }
+function priLabel(p) { return p==='hoog'?'🔴 Hoog':p==='gemiddeld'?'🟡 Gemiddeld':p==='opvolgen'?'🔵 Opvolgen':'🟢 Laag'; }
 function fmtDate(d)  {
   if (!d) return '';
   const dt = new Date(d), now = new Date();
@@ -1174,7 +1208,11 @@ function catEmoji(c) {
 function empty(icon, txt) {
   return `<div class="empty"><div class="ei">${icon}</div><div class="et">${txt}</div></div>`;
 }
-function autoresize(el) { el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
+function autoresize(el) {
+  el.style.height='auto';
+  const max = Math.round(window.innerHeight * 0.5);
+  el.style.height = Math.min(el.scrollHeight, max) + 'px';
+}
 
 let toastTimer;
 function toast(msg, ms=2200) {
@@ -1216,14 +1254,14 @@ async function init() {
   if (locallyModified.size > 0) {
     // Herstel lokale pending items uit localStorage en merge met Sheets
     S.items = localGet();
+    const sheetsMap = new Map(sheetsItems.map(x => [x.ID, x]));
+    clearConfirmedPending(sheetsMap);  // al bevestigde wijzigingen vrijgeven
     S.items = mergeItems(sheetsItems);
   } else {
     S.items = sheetsItems;
   }
 
   localSave();
-  locallyModified.clear();
-  savePending();
   updateBadge();
   render();
 
