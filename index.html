@@ -955,7 +955,7 @@ function renderCategory() {
     const allCats = [...new Set([...cats, ...all.map(i=>i.Categorie)])].filter(Boolean);
     let html = `<div class="cat-grid">` +
       allCats.map(c => `<div class="cat-card" onclick="setCat('${esc(c)}')">
-        <div class="cat-name">${catEmoji(c)} ${c}</div>
+        <div class="cat-name">${catLabel(c)}</div>
         <div class="cat-count">${cnt[c]||0} items</div>
       </div>`).join('') + `</div>`;
     // add custom category
@@ -969,7 +969,7 @@ function renderCategory() {
     const items = all.filter(i => i.Categorie === S.catFilter);
     el.innerHTML =
       `<button class="back-btn" onclick="setCat(null)">← Alle categorieën</button>
-       <div class="sec">${catEmoji(S.catFilter)} ${S.catFilter} — ${items.length} items</div>` +
+       <div class="sec">${catLabel(S.catFilter)} — ${items.length} items</div>` +
       (items.length ? items.map(i=>card(i)).join('') : empty('🗂️','Geen items'));
   }
 }
@@ -1098,7 +1098,7 @@ function card(item, inboxMode=false) {
       <span class="item-body">${esc(item.Inhoud)}</span>
     </div>
     <div class="item-meta">
-      ${item.Categorie ? `<span class="mtag">${catEmoji(item.Categorie)} ${item.Categorie}</span>` : ''}
+      ${item.Categorie ? `<span class="mtag">${catLabel(item.Categorie)}</span>` : ''}
       ${item.Tijdsduur ? `<span class="mtag">⏱️ ${item.Tijdsduur}</span>` : ''}
       ${item.Prioriteit ? `<span class="mtag">${priLabel(item.Prioriteit)}</span>` : ''}
       ${item.Datum ? `<span class="mtag">${fmtDate(item.Datum)}</span>` : ''}
@@ -1201,10 +1201,14 @@ function fmtDate(d)  {
   return dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
 }
 function catEmoji(c) {
+  if (/^\p{Extended_Pictographic}/u.test(c || '')) return '';
   const m = {'Computer & tech':'💻','Huishouden':'🏠','Werk':'💼',
              'Koken & eten':'🍳','Joa':'💛','Persoonlijk':'🧍',
              'Fotografie':'📷','Financiën':'💰'};
   return m[c] || '📌';
+}
+function catLabel(c) {
+  return [catEmoji(c), c].filter(Boolean).join(' ');
 }
 function empty(icon, txt) {
   return `<div class="empty"><div class="ei">${icon}</div><div class="et">${txt}</div></div>`;
